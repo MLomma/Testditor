@@ -56,7 +56,6 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          name: dist
           path: ./dist
 
   # Deployment job
@@ -68,30 +67,6 @@ jobs:
     needs:
       - build
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-
-      - name: Checkout gh-pages branch
-        run: |
-          git fetch origin gh-pages
-          git checkout gh-pages || git checkout --orphan gh-pages
-
-      - name: Download LiveEditor Artifact
-        uses: actions/download-artifact@master
-        with:
-          name: dist
-          path: dist
-
-      - name: Extract LiveEditor Artifact
-        run: |
-          mkdir -p dist
-          tar -xvf dist/artifact.tar -C dist
-          rm dist/artifact.tar
-
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
-          destination_dir: docs
-          publish_branch: gh-pages
+        id: deployment
+        uses: actions/deploy-pages@v4
