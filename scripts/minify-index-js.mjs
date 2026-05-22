@@ -1,7 +1,7 @@
 import { stat, rename, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { glob } from "node:fs/promises"
-import minify from "minify"
+import { minify } from "minify"
 
 const files = []
 
