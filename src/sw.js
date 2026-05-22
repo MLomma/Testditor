@@ -11,19 +11,23 @@ workbox.setConfig({
 })
 
 // Updating SW lifecycle to update the app after user triggered refresh
-// self.skipWaiting()
+self.skipWaiting()
 workbox.core.clientsClaim()
+workbox.precaching.cleanupOutdatedCaches()
 
-// workbox.googleAnalytics.initialize();
 workbox.routing.registerRoute(
-  // Match all navigation requests, except those for URLs whose
-  // path starts with '/admin/'
-  ({request, url}) => request.mode === 'navigate' && url.pathname.startsWith('/course/'),
-  new workbox.strategies.CacheFirst()
-);
+  ({ request, url }) => request.mode === 'navigate' && url.origin === self.location.origin,
+  new workbox.strategies.NetworkFirst({
+    cacheName: 'pages',
+  })
+)
 
-//workbox.routing.registerRoute(/\/*/, new workbox.strategies.NetworkFirst())
-workbox.routing.registerRoute(/.*/, new workbox.strategies.CacheFirst())
+workbox.routing.registerRoute(
+  ({ url }) => url.origin === self.location.origin,
+  new workbox.strategies.StaleWhileRevalidate({
+    cacheName: 'app-assets',
+  })
+)
 
 
 workbox.routing.registerRoute(

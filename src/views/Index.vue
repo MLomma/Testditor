@@ -2,10 +2,12 @@
 import Dexie from "../ts/indexDB";
 import Card from "../components/Card.vue";
 import Footer from "../components/Footer.vue";
+import NewCourseModal from "../components/NewCourseModal.vue";
 import * as Y from "yjs";
 import { IndexeddbPersistence } from "y-indexeddb";
 
 import MiniSearch from "minisearch";
+import * as Utils from "../ts/utils";
 
 import logoImg from "url:../../assets/logo.png";
 
@@ -35,6 +37,7 @@ function getTextFor(id: string) {
 export default {
   data() {
     const database = new Dexie();
+    const config = Utils.loadConfig();
 
     const self = this;
     database.watch(null, (e: any) => {
@@ -79,13 +82,37 @@ export default {
       }>,
       searchText: "",
       tags: [] as Array<{ name: string; active: boolean }>,
+      lights: config.lights,
+      showNewCourseModal: false,
     };
+  },
+
+  computed: {
+    lightMode() {
+      return this.lights ? "bi bi-sun" : "bi bi-moon";
+    },
   },
 
   mounted() {
     this.initSearch();
+    this.syncTheme();
   },
+
+  watch: {
+    lights() {
+      this.syncTheme();
+    },
+  },
+
   methods: {
+    syncTheme() {
+      const theme = this.lights ? "light" : "dark";
+
+      document.documentElement.setAttribute("data-bs-theme", theme);
+      document.body.setAttribute("data-bs-theme", theme);
+      document.body.classList.add("bg-body", "text-body");
+    },
+
     handleSearch() {
       const results = this.search.search(this.searchText, {
         fuzzy: 0.2,
@@ -130,7 +157,39 @@ export default {
     },
 
     newCourse() {
-      window.location.href = "./?/edit";
+      this.showNewCourseModal = true;
+    },
+
+    switchLights() {
+      const config = Utils.loadConfig();
+
+      this.lights = !this.lights;
+      config.lights = this.lights;
+      Utils.storeConfig(config);
+    },
+
+    async createNewCourse(params: {
+      author: string;
+      language: string;
+      link?: string;
+    }) {
+      let content = Utils.createCourseTemplate(params.author, params.language);
+      if (params.link && Utils.isMarkdownImportUrl(params.link)) {
+        try {
+          const importedContent = await Utils.loadMarkdownImport(params.link);
+
+          if (importedContent) {
+            content = importedContent;
+          }
+        } catch (error) {
+          console.warn("Could not import markdown for new course", error);
+        }
+      }
+
+      Utils.storePendingNewCourseTemplate(content);
+
+      this.showNewCourseModal = false;
+      window.location.href = Utils.urlPath(["edit"]);
     },
 
     async init() {
@@ -170,26 +229,38 @@ export default {
     await this.init();
   },
 
-  components: { Card, Footer },
+  components: { Card, Footer, NewCourseModal },
 };
 </script>
 
 <template>
-  <nav class="navbar navbar-expand-lg navbar-light bg-light">
-    <div class="container-fluid">
-      <a class="navbar-brand">
-        <img :src="logoImg" alt="LiaScript" height="28" />
-        LiaEdit
-      </a>
+  <div :data-bs-theme="lights ? 'light' : 'dark'" class="bg-body text-body min-vh-100">
+    <nav class="navbar navbar-expand-lg" :class="lights ? 'navbar-light bg-light' : 'navbar-dark bg-dark'">
+      <div class="container-fluid">
+        <a class="navbar-brand">
+          <img :src="logoImg" alt="LiaScript" height="28" />
+          LiaEdit
+        </a>
 
-      <button class="btn btn-primary" @click="newCourse">New Course</button>
-    </div>
-  </nav>
+        <div class="d-flex align-items-center gap-2">
+          <button
+            type="button"
+            class="btn btn-outline-secondary px-3"
+            @click="switchLights()"
+            title="Switch between light and dark mode"
+          >
+            <i :class="lightMode"></i>
+          </button>
 
-  <div
-    class="container mx-0 px-0 pb-5"
-    style="max-width: 100vw !important; height: 100%; overflow: scroll"
-  >
+          <button class="btn btn-primary" @click="newCourse">New Course</button>
+        </div>
+      </div>
+    </nav>
+
+    <div
+      class="container mx-0 px-0 pb-5"
+      style="max-width: 100vw !important; height: 100%; overflow: scroll"
+    >
     <div class="input-group" style="padding: 2rem 5rem 0rem 5rem">
       <input
         class="form-control"
@@ -273,5 +344,12 @@ export default {
       >, or already published
       <a href="https://github.com/topics/liascript-course" target="_blank">courses</a>.
     </Footer>
+
+      <NewCourseModal
+        :visible="showNewCourseModal"
+        @close="showNewCourseModal = false"
+        @create="createNewCourse"
+      />
+    </div>
   </div>
 </template>

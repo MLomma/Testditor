@@ -136,6 +136,7 @@ export default {
         movie: null,
       },
       blob: null,
+      globalDropHandler: null,
     };
   },
 
@@ -182,6 +183,263 @@ export default {
       if (Editor) {
         return Editor.getValue();
       }
+    },
+
+    setValue(value: string) {
+      if (!Editor) {
+        return;
+      }
+
+      Editor.setValue(value);
+
+      Editor.focus();
+    },
+
+    normalizeMediaSource(source: string) {
+      if (!source) {
+        return "";
+      }
+
+      let normalized = source.trim();
+
+      if (normalized.startsWith(window.location.origin + "/")) {
+        normalized = normalized.slice(window.location.origin.length + 1);
+      }
+
+      if (!normalized.startsWith("http://") && !normalized.startsWith("https://")) {
+        normalized = normalized.replace(/^\/+/, "");
+      }
+
+      try {
+        return decodeURIComponent(normalized);
+      } catch (_error) {
+        return normalized;
+      }
+    },
+
+    isStandaloneMediaLine(line: string) {
+      return /^\s*(?:!\?\[\]\([^)\n]+\)|!\[\]\([^)\n]+\)|\?\[\]\([^)\n]+\))\s*$/.test(
+        line
+      );
+    },
+
+    normalizeReorderedMediaSpacing(lines: string[]) {
+      const normalized: string[] = [];
+
+      for (let index = 0; index < lines.length; index++) {
+        const line = lines[index];
+
+        if (
+          line.trim() === "" &&
+          this.isStandaloneMediaLine(normalized[normalized.length - 1] || "")
+        ) {
+          continue;
+        }
+
+        normalized.push(line);
+
+        if (
+          this.isStandaloneMediaLine(line) &&
+          this.isStandaloneMediaLine(lines[index + 1] || "")
+        ) {
+          normalized.push("");
+        }
+      }
+
+      return normalized;
+    },
+
+    reorderStandaloneMedia(params: {
+      draggedSrc: string;
+      draggedOccurrence: number;
+      targetSrc: string;
+      targetOccurrence: number;
+      position: "before" | "after";
+    }) {
+      if (!Editor) {
+        return false;
+      }
+
+      const code = Editor.getValue();
+
+      if (!code) {
+        return false;
+      }
+
+      const hasTrailingNewline = code.endsWith("\n");
+      const lines = code.split("\n");
+      const mediaLines: Array<{
+        lineIndex: number;
+        source: string;
+        occurrence: number;
+      }> = [];
+      const occurrenceMap = new Map<string, number>();
+      const mediaRegex = /!\?\[\]\(([^)\n]+)\)|!\[\]\(([^)\n]+)\)|\?\[\]\(([^)\n]+)\)/;
+
+      for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+        const match = lines[lineIndex].match(mediaRegex);
+        if (!match) {
+          continue;
+        }
+
+        const rawSource = match[1] || match[2] || match[3] || "";
+        const source = this.normalizeMediaSource(rawSource);
+        const occurrence = occurrenceMap.get(source) || 0;
+
+        occurrenceMap.set(source, occurrence + 1);
+        mediaLines.push({ lineIndex, source, occurrence });
+      }
+
+      const draggedSource = this.normalizeMediaSource(params.draggedSrc);
+      const targetSource = this.normalizeMediaSource(params.targetSrc);
+
+      const dragged = mediaLines.find(
+        (entry) =>
+          entry.source === draggedSource && entry.occurrence === params.draggedOccurrence
+      );
+      const target = mediaLines.find(
+        (entry) => entry.source === targetSource && entry.occurrence === params.targetOccurrence
+      );
+
+      if (!dragged || !target || dragged.lineIndex === target.lineIndex) {
+        return false;
+      }
+
+      const orderedLines = [...lines];
+      const movedLine = orderedLines.splice(dragged.lineIndex, 1)[0];
+
+      let targetLineIndex = target.lineIndex;
+      if (dragged.lineIndex < targetLineIndex) {
+        targetLineIndex -= 1;
+      }
+
+      const insertAt =
+        params.position === "after" ? targetLineIndex + 1 : targetLineIndex;
+
+      orderedLines.splice(insertAt, 0, movedLine);
+
+      const normalizedLines = this.normalizeReorderedMediaSpacing(orderedLines);
+
+      const nextCode = normalizedLines.join("\n") + (hasTrailingNewline ? "\n" : "");
+
+      if (nextCode === code) {
+        return false;
+      }
+
+      Editor.executeEdits("preview-reorder", [
+        {
+          range: Editor.getModel().getFullModelRange(),
+          text: nextCode,
+        },
+      ]);
+
+      Editor.focus();
+      return true;
+    },
+
+    zoomIn() {
+      if (Editor) {
+        Editor.trigger("toolbar", "editor.action.fontZoomIn", null);
+        Editor.focus();
+      }
+    },
+
+    zoomOut() {
+      if (Editor) {
+        Editor.trigger("toolbar", "editor.action.fontZoomOut", null);
+        Editor.focus();
+      }
+    },
+
+    getDroppedMediaCommand(file: File) {
+      const mimeType = file.type.toLowerCase();
+
+      if (mimeType.startsWith("image/")) {
+        return "upload-image";
+      }
+
+      if (mimeType.startsWith("audio/")) {
+        return "upload-audio";
+      }
+
+      if (mimeType.startsWith("video/")) {
+        return "upload-movie";
+      }
+
+      const extension = file.name.split(".").pop()?.toLowerCase() || "";
+
+      if (["png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "avif"].includes(extension)) {
+        return "upload-image";
+      }
+
+      if (["mp3", "wav", "ogg", "m4a", "aac", "flac", "opus", "weba"].includes(extension)) {
+        return "upload-audio";
+      }
+
+      if (["mp4", "webm", "mov", "avi", "mkv", "ogv", "m4v"].includes(extension)) {
+        return "upload-movie";
+      }
+
+      return null;
+    },
+
+    createUploadedMediaMarkup(cmd: string, filename: string) {
+      switch (cmd) {
+        case "upload-image":
+          return `![](${filename})`;
+        case "upload-audio":
+          return `?[](${filename})`;
+        case "upload-movie":
+          return `!?[](${filename})`;
+        default:
+          return filename;
+      }
+    },
+
+    async insertDroppedMediaFiles(files: File[]) {
+      if (!Editor || !files.length) {
+        return false;
+      }
+
+      const snippets: string[] = [];
+
+      for (const file of files) {
+        const cmd = this.getDroppedMediaCommand(file);
+
+        if (!cmd) {
+          continue;
+        }
+
+        const arrayBuffer = await file.arrayBuffer();
+        const blob = new Uint8Array(arrayBuffer);
+        const hash = await fileHash(arrayBuffer);
+        const extension = file.name.split(".").pop()?.toLowerCase();
+        const filename = extension ? `${hash}.${extension}` : hash;
+
+        this.blob.set(filename, blob);
+        snippets.push(this.createUploadedMediaMarkup(cmd, filename));
+      }
+
+      if (!snippets.length) {
+        return false;
+      }
+
+      const position = Editor.getPosition();
+
+      Editor.executeEdits("", [
+        {
+          range: {
+            startLineNumber: position?.lineNumber || 1,
+            startColumn: position?.column || 1,
+            endLineNumber: position?.lineNumber || 1,
+            endColumn: position?.column || 1,
+          },
+          text: snippets.join("\n"),
+        },
+      ]);
+
+      Editor.focus();
+      return true;
     },
 
     make(cmd: string, data: any = null) {
@@ -784,15 +1042,53 @@ I (study) ~[[ am going to study ]]~ harder this term.
         return;
       }
 
+      const shouldInterceptDrop = (e: DragEvent) => {
+        const droppedFiles = Array.from(e.dataTransfer?.files || []);
+
+        if (droppedFiles.length) {
+          return true;
+        }
+
+        const url = e.dataTransfer?.getData("text/uri-list");
+        const textData = e.dataTransfer?.getData("text/plain");
+
+        return Boolean(url || textData);
+      };
+
       // Drag and drop handler for the editor
-      div.addEventListener("dragover", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-      });
+      div.addEventListener(
+        "dragover",
+        (e) => {
+          if (shouldInterceptDrop(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        },
+        true
+      );
 
       div.addEventListener(
         "drop",
         async (e) => {
+          const droppedFiles = Array.from(e.dataTransfer?.files || []);
+
+          if (shouldInterceptDrop(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+
+          if (droppedFiles.length && Editor) {
+            try {
+              const handled = await this.insertDroppedMediaFiles(droppedFiles);
+
+              if (handled) {
+                return false;
+              }
+            } catch (error) {
+              console.error("Could not handle dropped files:", error);
+            }
+          }
+
           // Zuerst prüfen, ob es sich um eine Markdown-Datei oder einen LiaScript-Link handelt
           let url = e.dataTransfer ? e.dataTransfer.getData("text/uri-list") : null;
           if (!url) {
@@ -1180,6 +1476,29 @@ I (study) ~[[ am going to study ]]~ harder this term.
       return textEditor;
     },
 
+    registerGlobalDropGuard() {
+      const preventFileNavigation = (e: DragEvent) => {
+        if ((e.dataTransfer?.files?.length || 0) > 0) {
+          e.preventDefault();
+        }
+      };
+
+      window.addEventListener("dragover", preventFileNavigation, true);
+      window.addEventListener("drop", preventFileNavigation, true);
+
+      this.globalDropHandler = preventFileNavigation;
+    },
+
+    unregisterGlobalDropGuard() {
+      if (!this.globalDropHandler) {
+        return;
+      }
+
+      window.removeEventListener("dragover", this.globalDropHandler, true);
+      window.removeEventListener("drop", this.globalDropHandler, true);
+      this.globalDropHandler = null;
+    },
+
     loadFromLocalStorage(editor: any, storageId: string) {
       const yDoc = new Y.Doc();
 
@@ -1211,9 +1530,18 @@ I (study) ~[[ am going to study ]]~ harder this term.
       }
 
       const indexeddbProvider = new IndexeddbPersistence(storageId, yDoc);
+      const content = yDoc.getText(storageId);
 
       const self = this;
       indexeddbProvider.on("synced", (event: any) => {
+        if (content.toString().trim().length === 0) {
+          const template = Utils.consumePendingNewCourseTemplate();
+
+          if (template) {
+            content.insert(0, template);
+          }
+        }
+
         console.log("liascript: content from the database is loaded");
         self.$emit("ready");
       });
@@ -1242,7 +1570,6 @@ I (study) ~[[ am going to study ]]~ harder this term.
           }
         });
       }
-      const content = yDoc.getText(storageId);
       this.blob = yDoc.getMap("blob");
 
       const monacoBinding = new MonacoBinding(
@@ -1255,6 +1582,8 @@ I (study) ~[[ am going to study ]]~ harder this term.
   },
 
   unmounted() {
+    this.unregisterGlobalDropGuard();
+
     if (provider) provider.destroy();
 
     // Dispose completion providers
@@ -1267,6 +1596,8 @@ I (study) ~[[ am going to study ]]~ harder this term.
   emits: ["compile", "ready", "online", "goto"],
 
   mounted() {
+    this.registerGlobalDropGuard();
+
     Editor = this.initEditor(this.content || "");
 
     if (provider) {
@@ -1337,14 +1668,17 @@ I (study) ~[[ am going to study ]]~ harder this term.
 <template>
   <nav
     v-if="toolbar"
-    class="navbar navbar-light bg-light"
-    style="
-      border-top: solid lightgray 2px;
-      border-bottom: solid lightgray 2px;
-      padding: 0px;
-    "
+    :data-bs-theme="lights ? 'light' : 'dark'"
+    :class="[
+      'navbar editor-toolbar',
+      lights ? 'navbar-light bg-light' : 'navbar-dark bg-dark',
+    ]"
   >
-    <div class="btn-toolbar" role="toolbar" aria-label="Toolbar with button groups">
+    <div
+      class="btn-toolbar editor-main-toolbar"
+      role="toolbar"
+      aria-label="Toolbar with button groups"
+    >
       <div class="btn-group" role="group" aria-label="Text formatting">
         <button
           class="btn btn-sm btn-outline-secondary"
@@ -1792,6 +2126,28 @@ I (study) ~[[ am going to study ]]~ harder this term.
         </button>
       </div>
     </div>
+
+    <div class="btn-toolbar editor-zoom-toolbar" role="toolbar" aria-label="Editor zoom toolbar">
+      <div class="btn-group" role="group" aria-label="Editor font zoom">
+        <button
+          class="btn btn-sm btn-outline-secondary"
+          type="button"
+          title="Editor Font Zoom In"
+          @click="zoomIn()"
+        >
+          <i class="bi bi-plus-lg"></i>
+        </button>
+
+        <button
+          class="btn btn-sm btn-outline-secondary"
+          type="button"
+          title="Editor Font Zoom Out"
+          @click="zoomOut()"
+        >
+          <i class="bi bi-dash-lg"></i>
+        </button>
+      </div>
+    </div>
   </nav>
 
   <div
@@ -1868,6 +2224,15 @@ I (study) ~[[ am going to study ]]~ harder this term.
   height: 100vh;
 }
 
+.editor-toolbar {
+  border-top: 2px solid var(--bs-border-color);
+  border-bottom: 2px solid var(--bs-border-color);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
 .btn-sm {
   padding: 0.4rem 0.75rem 0.2rem 0.75rem;
 }
@@ -1898,6 +2263,15 @@ I (study) ~[[ am going to study ]]~ harder this term.
   flex-wrap: wrap;
   flex-direction: row;
   flex-flow: row wrap;
+}
+
+.editor-main-toolbar,
+.editor-zoom-toolbar {
+  width: 100%;
+}
+
+.editor-zoom-toolbar {
+  border-top: 1px solid var(--bs-border-color);
 }
 
 .icon-overlay {

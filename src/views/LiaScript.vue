@@ -3,6 +3,7 @@ import { tutorial } from "../ts/Tutorial";
 import Dexie from "../ts/indexDB";
 
 import Editor from "../components/Editor.vue";
+import NewCourseModal from "../components/NewCourseModal.vue";
 import Preview from "../components/Preview.vue";
 import Modal from "../components/Modal.vue";
 import { compress } from "shrink-string";
@@ -13,7 +14,14 @@ import JSZip from "jszip";
 import { Splitpanes, Pane } from "splitpanes";
 import "splitpanes/dist/splitpanes.css";
 
-import { LiaScriptURL } from "../ts/utils";
+import {
+  isMarkdownImportUrl,
+  LiaScriptURL,
+  createCourseTemplate,
+  loadMarkdownImport,
+  storePendingNewCourseTemplate,
+  urlPath,
+} from "../ts/utils";
 import NostrModal from "./Export/Nostr.vue";
 
 // @ts-ignore
@@ -101,6 +109,7 @@ export default {
       },
       resizing: false,
       LiaScriptURL,
+      showNewCourseModal: false,
       nostrModalVisible: false,
     };
   },
@@ -120,7 +129,31 @@ export default {
 
   methods: {
     newCourse() {
-      window.location.href = "./?/edit";
+      this.showNewCourseModal = true;
+    },
+
+    async createNewCourse(params: {
+      author: string;
+      language: string;
+      link?: string;
+    }) {
+      let content = createCourseTemplate(params.author, params.language);
+      if (params.link && isMarkdownImportUrl(params.link)) {
+        try {
+          const importedContent = await loadMarkdownImport(params.link);
+
+          if (importedContent) {
+            content = importedContent;
+          }
+        } catch (error) {
+          console.warn("Could not import markdown for new course", error);
+        }
+      }
+
+      storePendingNewCourseTemplate(content);
+
+      this.showNewCourseModal = false;
+      window.location.href = urlPath(["edit"]);
     },
 
     urlPath(path: string[]) {
@@ -417,6 +450,18 @@ export default {
       if (this.preview) this.preview.gotoLine(line);
     },
 
+    reorderPreviewMedia(params: any) {
+      if (!this.$refs.editor) {
+        return;
+      }
+
+      const changed = this.$refs.editor.reorderStandaloneMedia(params);
+
+      if (changed) {
+        this.compile();
+      }
+    },
+
     previewUpdate(params: any) {
       console.log("liascript: update");
 
@@ -435,12 +480,26 @@ export default {
     },
   },
 
-  components: { Editor, Modal, Pane, Preview, Splitpanes, NostrModal },
+  components: {
+    Editor,
+    Modal,
+    NewCourseModal,
+    Pane,
+    Preview,
+    Splitpanes,
+    NostrModal,
+  },
 };
 </script>
 
 <template>
-  <nav class="navbar navbar-expand-lg bg-light">
+  <nav
+    :data-bs-theme="lights ? 'light' : 'dark'"
+    :class="[
+      'navbar navbar-expand-lg',
+      lights ? 'navbar-light bg-light' : 'navbar-dark bg-dark',
+    ]"
+  >
     <div class="container-fluid">
       <a v-if="!embed" class="navbar-brand" href="./" data-link="true">
         <img :src="logoImg" alt="LiaScript" height="28" />
@@ -929,6 +988,7 @@ export default {
           @ready="previewReady"
           @update="previewUpdate"
           @goto="gotoEditor"
+          @reorder="reorderPreviewMedia"
           :fetchError="fetchError"
           :class="{ invisible: previewNotReady }"
         />
@@ -937,6 +997,11 @@ export default {
   </div>
 
   <Modal ref="modal" />
+  <NewCourseModal
+    :visible="showNewCourseModal"
+    @close="showNewCourseModal = false"
+    @create="createNewCourse"
+  />
   <NostrModal
     ref="nostrModal"
     :visible="nostrModalVisible"
