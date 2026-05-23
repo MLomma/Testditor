@@ -547,11 +547,30 @@ export default {
   },
 
   methods: {
+    lockPreviewTranslation() {
+      const iframe = document.getElementById("liascript-preview") as HTMLIFrameElement | null;
+
+      iframe?.setAttribute("translate", "no");
+      iframe?.classList.add("notranslate");
+
+      const previewDocument = iframe?.contentDocument;
+
+      if (!previewDocument?.documentElement || !previewDocument.body) {
+        return;
+      }
+
+      previewDocument.documentElement.setAttribute("translate", "no");
+      previewDocument.documentElement.classList.add("notranslate");
+      previewDocument.body.setAttribute("translate", "no");
+      previewDocument.body.classList.add("notranslate");
+    },
+
     onReady(params: any) {
       const iframe = document.getElementById("liascript-preview") as HTMLIFrameElement;
 
       if (!this.isReady && iframe && iframe.contentWindow) {
         this.isReady = true;
+        this.lockPreviewTranslation();
 
         // only inject if key has been defined
         if (this.responsiveVoiceKey) {
@@ -589,6 +608,9 @@ export default {
   mounted() {
     const iframe = document.getElementById("liascript-preview");
 
+    iframe?.addEventListener("load", this.lockPreviewTranslation);
+    this.lockPreviewTranslation();
+
     // @ts-ignore
     if (iframe && iframe.contentWindow) {
       // @ts-ignore
@@ -605,12 +627,22 @@ export default {
 </script>
 
 <template>
-  <iframe id="liascript-preview" :src="origin" allow="autoplay"></iframe>
+  <iframe
+    id="liascript-preview"
+    class="notranslate"
+    translate="no"
+    :src="origin"
+    allow="autoplay"
+  ></iframe>
 </template>
 
 <style scoped>
 #liascript-preview {
   height: 100%;
   width: 100%;
+}
+
+#liascript-preview[translate='no'] {
+  translate: no;
 }
 </style>

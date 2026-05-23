@@ -92,12 +92,13 @@ export default {
 
     return {
       logoImg,
+      toolbarReady: false,
       preview: undefined,
       horizontal:
         document.documentElement.clientWidth < document.documentElement.clientHeight,
       previewNotReady: true,
       compilationCounter: 0,
-      mode: this.$props.mode || 0,
+      viewMode: this.$props.mode || 0,
       editorIsReady: false,
       database,
       meta: {},
@@ -121,6 +122,12 @@ export default {
   },
 
   mounted() {
+    this.syncTheme();
+
+    this.$nextTick(() => {
+      this.toolbarReady = true;
+    });
+
     window.addEventListener("resize", () => {
       this.horizontal =
         document.documentElement.clientWidth < document.documentElement.clientHeight;
@@ -128,6 +135,22 @@ export default {
   },
 
   methods: {
+    syncTheme() {
+      const theme = this.lights ? "light" : "dark";
+      const backgroundColor = this.lights ? "" : "#323232";
+
+      document.documentElement.setAttribute("data-bs-theme", theme);
+      document.body.setAttribute("data-bs-theme", theme);
+      document.body.classList.add("bg-body", "text-body");
+      document.documentElement.style.backgroundColor = backgroundColor;
+      document.body.style.backgroundColor = backgroundColor;
+
+      const app = document.getElementById("app");
+      if (app) {
+        app.style.backgroundColor = backgroundColor;
+      }
+    },
+
     newCourse() {
       this.showNewCourseModal = true;
     },
@@ -172,7 +195,7 @@ export default {
     },
 
     changeMode(mode: number) {
-      this.mode = mode;
+      this.viewMode = mode;
     },
 
     nostr() {
@@ -411,6 +434,7 @@ export default {
 
     switchLights() {
       this.lights = this.$refs.editor.switchLights();
+      this.syncTheme();
     },
 
     compile() {
@@ -500,37 +524,41 @@ export default {
 </script>
 
 <template>
-  <nav
+  <div
     :data-bs-theme="lights ? 'light' : 'dark'"
-    :class="[
-      'navbar navbar-expand-lg',
-      lights ? 'navbar-light bg-light' : 'navbar-dark bg-dark',
-    ]"
+    :class="['editor-page', lights ? 'editor-page--light' : 'editor-page--dark']"
   >
-    <div class="container-fluid">
-      <a v-if="!embed" class="navbar-brand" href="./" data-link="true">
-        <img :src="logoImg" alt="LiaScript" height="28" />
-        <span id="lia-edit">LiaEdit</span>
-      </a>
-      <span v-else class="navbar-brand">
-        <img :src="logoImg" alt="LiaScript" height="28" />
-        <span id="lia-edit">LiaDemo</span>
-      </span>
+    <nav
+      :data-bs-theme="lights ? 'light' : 'dark'"
+      :class="[
+        'navbar navbar-expand-lg editor-nav',
+        lights ? 'navbar-light bg-light' : 'navbar-dark bg-dark',
+      ]"
+    >
+      <div class="container-fluid">
+        <a v-if="!embed" class="navbar-brand" href="./" data-link="true">
+          <img :src="logoImg" alt="LiaScript" height="28" />
+          <span id="lia-edit">LiaEdit</span>
+        </a>
+        <span v-else class="navbar-brand">
+          <img :src="logoImg" alt="LiaScript" height="28" />
+          <span id="lia-edit">LiaDemo</span>
+        </span>
 
-      <button
-        type="button"
-        class="btn btn-outline-secondary me-2 px-3"
-        @click="switchLights()"
-        title="Switch between light and dark mode"
-      >
-        <i :class="lightMode"></i>
-      </button>
+        <button
+          type="button"
+          class="btn btn-outline-secondary me-2 px-3"
+          @click="switchLights()"
+          title="Switch between light and dark mode"
+        >
+          <i :class="lightMode"></i>
+        </button>
 
-      <div
-        class="btn-toolbar btn-group-sm"
-        role="toolbar"
-        aria-label="Toolbar with button groups"
-      >
+        <div
+          class="btn-toolbar btn-group-sm"
+          role="toolbar"
+          aria-label="Toolbar with button groups"
+        >
         <div
           class="btn-group btn-outline-secondary me-2"
           role="group"
@@ -543,7 +571,7 @@ export default {
             id="btnradio1"
             autocomplete="off"
             @click="changeMode(-1)"
-            :checked="mode < 0"
+            :checked="viewMode < 0"
           />
           <label class="btn btn-outline-secondary" for="btnradio1" title="Editor only">
             <i class="bi bi-pencil"></i>
@@ -555,7 +583,7 @@ export default {
             name="btnradio"
             id="btnradio2"
             autocomplete="off"
-            :checked="mode === 0"
+            :checked="viewMode === 0"
             @click="changeMode(0)"
           />
           <label class="btn btn-outline-secondary" for="btnradio2" title="Split view">
@@ -573,7 +601,7 @@ export default {
             id="btnradio3"
             autocomplete="off"
             @click="changeMode(1)"
-            :checked="mode > 0"
+            :checked="viewMode > 0"
           />
           <label class="btn btn-outline-secondary" for="btnradio3" title="Preview only">
             <i class="bi bi-eye"></i>
@@ -605,7 +633,7 @@ export default {
         <span class="navbar-toggler-icon"></span>
       </button>
 
-      <div v-if="!embed" class="collapse navbar-collapse" id="navbarSupportedContent">
+        <div v-if="!embed" class="collapse navbar-collapse" id="navbarSupportedContent">
         <!-- SPAN -->
         <div class="navbar-nav me-auto mb-lg-0"></div>
 
@@ -638,7 +666,8 @@ export default {
           <div class="nav-item me-4">
             <button
               type="button"
-              class="btn nav-link btn-link"
+              class="btn nav-link btn-link notranslate"
+              translate="no"
               @click="fork"
               title="Create a copy of this document"
             >
@@ -649,7 +678,8 @@ export default {
 
           <div class="nav-item dropdown me-4">
             <a
-              class="nav-link dropdown-toggle"
+              class="nav-link dropdown-toggle notranslate"
+              translate="no"
               href="#"
               role="button"
               data-bs-toggle="dropdown"
@@ -924,52 +954,56 @@ export default {
             </ul>
           </div>
         </div>
+        </div>
       </div>
-    </div>
-  </nav>
+    </nav>
 
-  <div class="container p-0" style="max-width: 100%">
-    <splitpanes
-      id="liascript-ide"
-      class="default-theme"
-      style="height: calc(100vh - 56px)"
-      @resize="resizing = true"
-      @resized="resizing = false"
-      :horizontal="horizontal"
-    >
+    <div id="editor-toolbar-inline-host" class="editor-toolbar-host"></div>
+
+    <div class="container p-0 editor-layout" style="max-width: 100%">
+      <splitpanes
+        id="liascript-ide"
+        class="default-theme"
+        @resize="resizing = true"
+        @resized="resizing = false"
+        :horizontal="horizontal"
+      >
       <pane
-        :hidden="mode > 0"
+        :hidden="viewMode > 0"
         style="border-right: solid lightgray 2px"
         :class="{
-          fullHeight: mode < 0 && horizontal,
-          fullWidth: mode < 0 && !horizontal,
+          fullHeight: viewMode < 0 && horizontal,
+          fullWidth: viewMode < 0 && !horizontal,
         }"
       >
-        <Editor
-          class="col w-100 p-0 h-100"
-          @compile="compile"
-          @ready="editorReady"
-          @online="online"
-          @goto="gotoPreview"
-          :storage-id="$props.storageId"
-          :content="$props.content"
-          ref="editor"
-          :connection="$props.connection"
-          :toolbar="!$props.embed"
-        >
-        </Editor>
+        <div v-if="toolbarReady" class="editor-content-lock h-100 notranslate" translate="no">
+          <Editor
+            class="col w-100 p-0 h-100"
+            @compile="compile"
+            @ready="editorReady"
+            @online="online"
+            @goto="gotoPreview"
+            :storage-id="$props.storageId"
+            :content="$props.content"
+            ref="editor"
+            :connection="$props.connection"
+            :toolbar="!$props.embed"
+            toolbar-target="#editor-toolbar-inline-host"
+          >
+          </Editor>
+        </div>
       </pane>
 
       <pane
-        :hidden="mode < 0"
+        :hidden="viewMode < 0"
         :class="{
-          fullHeight: mode > 0 && horizontal,
-          fullWidth: mode > 0 && !horizontal,
+          fullHeight: viewMode > 0 && horizontal,
+          fullWidth: viewMode > 0 && !horizontal,
         }"
       >
         <div
           v-show="previewNotReady"
-          style="position: absolute; background-color: white; width: 50%; height: 100%"
+          class="preview-loading-overlay"
         >
           <div
             class="spinner-grow"
@@ -991,31 +1025,34 @@ export default {
           style="position: absolute; width: 100%; height: 100%"
         ></div>
 
-        <Preview
-          @ready="previewReady"
-          @update="previewUpdate"
-          @goto="gotoEditor"
-          @reorder="reorderPreviewMedia"
-          :fetchError="fetchError"
-          :class="{ invisible: previewNotReady }"
-        />
+        <div class="preview-content-lock h-100 notranslate" translate="no">
+          <Preview
+            @ready="previewReady"
+            @update="previewUpdate"
+            @goto="gotoEditor"
+            @reorder="reorderPreviewMedia"
+            :fetchError="fetchError"
+            :class="{ invisible: previewNotReady }"
+          />
+        </div>
       </pane>
-    </splitpanes>
-  </div>
+      </splitpanes>
+    </div>
 
-  <Modal ref="modal" />
-  <NewCourseModal
-    :visible="showNewCourseModal"
-    @close="showNewCourseModal = false"
-    @create="createNewCourse"
-  />
-  <NostrModal
-    ref="nostrModal"
-    :visible="nostrModalVisible"
-    :storageId="$props.storageId"
-    :courseUrl="LiaScriptURL"
-    @close="nostrModalVisible = false"
-  />
+    <Modal ref="modal" />
+    <NewCourseModal
+      :visible="showNewCourseModal"
+      @close="showNewCourseModal = false"
+      @create="createNewCourse"
+    />
+    <NostrModal
+      ref="nostrModal"
+      :visible="nostrModalVisible"
+      :storageId="$props.storageId"
+      :courseUrl="LiaScriptURL"
+      @close="nostrModalVisible = false"
+    />
+  </div>
 </template>
 
 <style scoped>
@@ -1025,6 +1062,37 @@ export default {
 
 .invisible {
   visibility: hidden;
+}
+
+.editor-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.editor-page--dark {
+  background-color: #323232;
+}
+
+.editor-page--dark,
+.editor-page--dark .container,
+.editor-page--dark .container-fluid,
+.editor-page--dark .bg-body {
+  background-color: #323232 !important;
+}
+
+.editor-nav.navbar-dark {
+  background-color: #323232 !important;
+}
+
+.editor-content-lock,
+.preview-content-lock {
+  height: 100%;
+}
+
+.editor-content-lock[translate='no'],
+.preview-content-lock[translate='no'] {
+  translate: no;
 }
 
 .fullWidth {
@@ -1039,6 +1107,54 @@ export default {
   .btn {
     padding: 0.2rem 0.4rem;
   }
+}
+
+.editor-layout {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.editor-toolbar-host {
+  flex: 0 0 auto;
+  width: 100%;
+}
+
+.editor-page--dark .editor-layout,
+.editor-page--dark .editor-toolbar-host,
+.editor-page--dark #liascript-ide,
+.editor-page--dark .splitpanes__pane,
+.editor-page--dark .preview-loading-overlay,
+.editor-page--dark #liascript-editor,
+.editor-page--dark #liascript-editor .monaco-editor,
+.editor-page--dark #liascript-editor .monaco-editor-background,
+.editor-page--dark #liascript-editor .margin {
+  background-color: #323232;
+}
+
+#liascript-ide {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.preview-loading-overlay {
+  position: absolute;
+  width: 50%;
+  height: 100%;
+  background-color: white;
+}
+
+.btn-toolbar .btn-outline-secondary,
+.btn-toolbar .btn-group > .btn,
+.btn-toolbar .btn-group > label.btn-outline-secondary,
+button.btn.btn-outline-secondary.me-2,
+button.btn.btn-outline-secondary.me-2.px-3 {
+  border-width: 2px;
+}
+
+.notranslate {
+  translate: no;
 }
 
 #lia-edit {
@@ -1056,8 +1172,20 @@ export default {
 </style>
 
 <style>
+.editor-page--dark #liascript-editor,
+.editor-page--dark #liascript-editor .monaco-editor,
+.editor-page--dark #liascript-editor .monaco-editor-background,
+.editor-page--dark #liascript-editor .margin,
+.editor-page--dark #liascript-editor .monaco-editor .margin-view-overlays {
+  background-color: #323232 !important;
+}
+
 .splitpanes__splitter {
   background-color: #f8f9fa !important;
+}
+
+.editor-page--dark .splitpanes__splitter {
+  background-color: #323232 !important;
 }
 
 .splitpanes--vertical > .splitpanes__splitter {

@@ -10,6 +10,7 @@ import AudioRecorder from 'vue3-mic-recorder'
 import { randomString } from './ts/utils'
 
 var app
+const APP_ROOT_ID = 'app'
 
 const pathToRegex = (path) =>
   new RegExp('^' + path.replace(/\//g, '\\/').replace(/:\w+/g, '(.+)') + '$')
@@ -122,7 +123,7 @@ const router = async () => {
   app = createApp(view, params)
   app.use(AudioRecorder)
 
-  app.mount(document.body)
+  app.mount(`#${APP_ROOT_ID}`)
 }
 
 window.addEventListener('popstate', router)

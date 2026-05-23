@@ -109,24 +109,193 @@ function blobToUint8Array(blob) {
   });
 }
 
+function toolbarAction(title: string, command: string, icon: string, extra: any = {}) {
+  return { title, command, icon, ...extra };
+}
+
+const TOOLBAR_CATEGORIES = [
+  {
+    id: "text",
+    label: "Text",
+    groups: [
+      {
+        label: "Text formatting",
+        actions: [
+          toolbarAction("Bold", "bold", "bi-type-bold"),
+          toolbarAction("Italic", "italic", "bi-type-italic"),
+          toolbarAction("Heading", "header", "bi-type-h1"),
+          toolbarAction("Strikethrough", "strikethrough", "bi-type-strikethrough"),
+          toolbarAction("Underline", "underline", "bi-type-underline"),
+          toolbarAction("Superscript", "superscript", "bi-superscript"),
+          toolbarAction("Inline Code", "code-inline", "bi-code"),
+          toolbarAction("Keyboard", "keyboard", "bi-keyboard"),
+        ],
+      },
+      {
+        label: "Structure",
+        actions: [
+          toolbarAction("Quote", "quote", "bi-quote"),
+          toolbarAction("List", "list-unordered", "bi-list-ul"),
+          toolbarAction("Numbered List", "list-ordered", "bi-list-ol"),
+          toolbarAction("Check List", "list-check", "bi-check-square"),
+          toolbarAction("Table", "table", "bi-table"),
+          toolbarAction("Horizontal Line", "line", "bi-hr"),
+        ],
+      },
+    ],
+  },
+  {
+    id: "code",
+    label: "Code",
+    groups: [
+      {
+        label: "Code Blocks",
+        actions: [
+          toolbarAction("Code Block", "code", "bi-code-slash"),
+          toolbarAction("Executable Code", "code-executable", "bi-terminal"),
+          toolbarAction("Executable Code Project", "code-project", "bi-terminal-split"),
+          toolbarAction("Initialize empty document", "init", "bi-rocket-takeoff"),
+        ],
+      },
+      {
+        label: "MathJS helpers",
+        actions: [
+          toolbarAction("MathJS - Evaluate Expression (Ctrl+E)", "mathjs-evaluate", "bi-gear"),
+          toolbarAction("MathJS - Simplify Expression (Ctrl+M)", "mathjs-simplify", "bi-gear", {
+            overlayIcon: "bi-lightning-charge",
+          }),
+          toolbarAction("MathJS - Convert to TeX (Ctrl+O)", "mathjs-tex", "bi-gear", {
+            overlayText: "TeX",
+          }),
+        ],
+      },
+    ],
+  },
+  {
+    id: "media",
+    label: "Medien",
+    groups: [
+      {
+        label: "Embed or Link to Multimedia",
+        actions: [
+          toolbarAction("Link", "link", "bi-link-45deg"),
+          toolbarAction("Image", "image", "bi-image"),
+          toolbarAction("Audio", "audio", "bi-music-note-beamed"),
+          toolbarAction("Movie", "movie", "bi-film"),
+          toolbarAction("Try to embed any kind of link", "oembed", "bi-puzzle"),
+        ],
+      },
+      {
+        label: "Upload Multimedia",
+        actions: [
+          toolbarAction("Upload Image", "upload-image", "bi-upload", {
+            overlayIcon: "bi-image",
+          }),
+          toolbarAction("Upload Audio", "upload-audio", "bi-upload", {
+            overlayIcon: "bi-music-note-beamed",
+          }),
+          toolbarAction("Upload Movie", "upload-movie", "bi-upload", {
+            overlayIcon: "bi-film",
+          }),
+        ],
+      },
+    ],
+  },
+  {
+    id: "quiz",
+    label: "Quiz",
+    groups: [
+      {
+        label: "Quizzes",
+        actions: [
+          toolbarAction("Single Choice Quiz", "quiz-single-choice", "bi-x-circle", {
+            overlayIcon: "bi-question-lg",
+          }),
+          toolbarAction("Multiple Choice Quiz", "quiz-multiple-choice", "bi-x-square", {
+            overlayIcon: "bi-question-lg",
+          }),
+          toolbarAction("Text Input Quiz", "quiz-input", "bi-input-cursor-text", {
+            overlayIcon: "bi-question-lg",
+          }),
+          toolbarAction("Selection Quiz", "quiz-selection", "bi-option", {
+            overlayIcon: "bi-question-lg",
+          }),
+          toolbarAction("Matrix Quiz", "quiz-matrix", "bi-grid-3x3-gap", {
+            overlayIcon: "bi-question-lg",
+          }),
+          toolbarAction("Gap Text", "quiz-gap-text", "bi-body-text", {
+            overlayIcon: "bi-question-lg",
+          }),
+        ],
+      },
+    ],
+  },
+  {
+    id: "math",
+    label: "Mathe",
+    groups: [
+      {
+        label: "Formulas with KaTeX",
+        actions: [
+          toolbarAction("Inline Formula", "formula-inline", "bi-currency-dollar"),
+          toolbarAction("Formula Block", "formula", "bi-currency-dollar", {
+            overlayIcon: "bi-currency-dollar",
+          }),
+        ],
+      },
+      {
+        label: "ASCII-art drawings",
+        actions: [
+          toolbarAction("Graph", "graph", "bi-graph-down"),
+          toolbarAction("ASCII-Art", "ascii", "bi-boxes"),
+        ],
+      },
+    ],
+  },
+  {
+    id: "effects",
+    label: "Extras",
+    groups: [
+      {
+        label: "LiaScript Effects",
+        actions: [
+          toolbarAction("Animation", "animation", "bi-lightning-fill", {
+            overlayIcon: "bi-easel",
+          }),
+          toolbarAction("Comment", "comment", "bi-chat-text", {
+            overlayIcon: "bi-easel",
+          }),
+          toolbarAction("Speak out loud", "tts", "bi-play-circle", {
+            overlayIcon: "bi-easel",
+          }),
+        ],
+      },
+      {
+        label: "Recorder",
+        actions: [
+          toolbarAction("Open audio recorder", "", "bi-mic", { recorder: "audio" }),
+          toolbarAction("Open webcam recorder", "", "bi-webcam", { recorder: "webcam" }),
+          toolbarAction("Open desktop recorder", "", "bi-camera-reels", {
+            recorder: "desktop",
+          }),
+        ],
+      },
+    ],
+  },
+];
+
 export default {
   name: "Editor",
   components: { Recorder },
-  props: ["storageId", "content", "lights", "connection", "toolbar"],
+  props: ["storageId", "content", "lights", "connection", "toolbar", "toolbarTarget"],
 
   data() {
     const config = Utils.loadConfig();
 
-    let toolbar = true;
-
-    if (this.$props.toolbar !== undefined) {
-      toolbar = this.$props.toolbar;
-    }
-
     return {
-      lights: config.lights,
+      editorLights: config.lights,
       user: config.user,
-      toolbar: toolbar,
+      activeToolbarCategory: TOOLBAR_CATEGORIES[0].id,
       recorder: { audio: false, webcam: false, desktop: false },
 
       online: null,
@@ -140,7 +309,29 @@ export default {
     };
   },
 
+  computed: {
+    toolbarCategories() {
+      return TOOLBAR_CATEGORIES;
+    },
+
+    activeToolbarConfig() {
+      return (
+        TOOLBAR_CATEGORIES.find((category) => category.id === this.activeToolbarCategory) ||
+        TOOLBAR_CATEGORIES[0]
+      );
+    },
+  },
+
   methods: {
+    triggerToolbarAction(action) {
+      if (action.recorder) {
+        this.recorder[action.recorder] = true;
+        return;
+      }
+
+      this.make(action.command);
+    },
+
     storeAudioFile(record) {
       if (record.blob) {
         const self = this;
@@ -968,17 +1159,17 @@ I (study) ~[[ am going to study ]]~ harder this term.
       if (Editor) {
         const config = Utils.loadConfig();
 
-        this.lights = !this.lights;
+        this.editorLights = !this.editorLights;
         Editor.updateOptions({
-          theme: this.lights ? "vs-light" : "vs-dark",
+          theme: this.editorLights ? "vs-light" : "vs-dark",
         });
 
-        config.lights = this.lights;
+        config.lights = this.editorLights;
 
         Utils.storeConfig(config);
       }
 
-      return this.lights;
+      return this.editorLights;
     },
 
     getBlob(hash: string) {
@@ -1190,7 +1381,7 @@ I (study) ~[[ am going to study ]]~ harder this term.
       const Editor = editor.create(div, {
         value: code,
         language: "markdown",
-        theme: this.lights ? "vs-light" : "vs-dark",
+        theme: this.editorLights ? "vs-light" : "vs-dark",
         automaticLayout: true,
         wordWrap: "on",
         renderWhitespace: "boundary",
@@ -1650,565 +1841,181 @@ I (study) ~[[ am going to study ]]~ harder this term.
 </script>
 
 <template>
-  <nav
-    v-if="toolbar"
-    :data-bs-theme="lights ? 'light' : 'dark'"
-    :class="[
-      'navbar editor-toolbar',
-      lights ? 'navbar-light bg-light' : 'navbar-dark bg-dark',
-    ]"
-  >
+  <div class="editor-shell notranslate" translate="no">
+    <Teleport v-if="toolbar" :to="toolbarTarget || 'body'" :disabled="!toolbarTarget">
+      <nav
+        :data-bs-theme="editorLights ? 'light' : 'dark'"
+        :class="[
+          'navbar editor-toolbar',
+          editorLights ? 'navbar-light bg-light' : 'navbar-dark bg-dark',
+        ]"
+      >
+        <div class="btn-toolbar editor-category-toolbar" role="toolbar" aria-label="Toolbar categories">
+          <div class="editor-category-group" role="group" aria-label="Toolbar categories">
+            <button
+              v-for="category in toolbarCategories"
+              :key="category.id"
+              class="btn btn-sm"
+              :class="activeToolbarCategory === category.id ? 'btn-primary' : 'btn-outline-secondary'"
+              type="button"
+              :title="category.label"
+              @click="activeToolbarCategory = category.id"
+            >
+              {{ category.label }}
+            </button>
+          </div>
+        </div>
+
+        <div
+          class="btn-toolbar editor-main-toolbar"
+          role="toolbar"
+          :aria-label="`${activeToolbarConfig.label} toolbar`"
+        >
+          <div
+            v-for="group in activeToolbarConfig.groups"
+            :key="`${activeToolbarConfig.id}-${group.label}`"
+            class="btn-group"
+            role="group"
+            :aria-label="group.label"
+          >
+            <button
+              v-for="action in group.actions"
+              :key="`${group.label}-${action.title}`"
+              class="btn btn-sm btn-outline-secondary"
+              type="button"
+              :title="action.title"
+              @click="triggerToolbarAction(action)"
+            >
+              <i :class="['bi', action.icon]"></i>
+              <i
+                v-if="action.overlayIcon"
+                :class="['bi', action.overlayIcon, 'icon-overlay']"
+              ></i>
+              <i v-else-if="action.overlayText" class="bi icon-overlay">{{ action.overlayText }}</i>
+            </button>
+          </div>
+        </div>
+
+        <input type="file" id="imageInput" style="display: none" accept="image/*" />
+        <input type="file" id="audioInput" style="display: none" accept="audio/*" />
+        <input type="file" id="movieInput" style="display: none" accept="video/*" />
+
+        <div class="btn-toolbar editor-zoom-toolbar" role="toolbar" aria-label="Editor zoom toolbar">
+          <div class="btn-group" role="group" aria-label="Editor font zoom">
+            <button
+              class="btn btn-sm btn-outline-secondary"
+              type="button"
+              title="Editor Font Zoom In"
+              @click="zoomIn()"
+            >
+              <i class="bi bi-plus-lg"></i>
+            </button>
+
+            <button
+              class="btn btn-sm btn-outline-secondary"
+              type="button"
+              title="Editor Font Zoom Out"
+              @click="zoomOut()"
+            >
+              <i class="bi bi-dash-lg"></i>
+            </button>
+          </div>
+        </div>
+      </nav>
+    </Teleport>
+
     <div
-      class="btn-toolbar editor-main-toolbar"
-      role="toolbar"
-      aria-label="Toolbar with button groups"
+      style="
+        z-index: 100;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+      "
+      v-if="recorder.audio"
     >
-      <div class="btn-group" role="group" aria-label="Text formatting">
+      <div>
         <button
-          class="btn btn-sm btn-outline-secondary"
           type="button"
-          title="Bold"
-          @click="make('bold')"
-        >
-          <i class="bi bi-type-bold"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Italic"
-          @click="make('italic')"
-        >
-          <i class="bi bi-type-italic"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Heading"
-          @click="make('header')"
-        >
-          <i class="bi bi-type-h1"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Strikethrough"
-          @click="make('strikethrough')"
-        >
-          <i class="bi bi-type-strikethrough"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Underline"
-          @click="make('underline')"
-        >
-          <i class="bi bi-type-underline"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Superscript"
-          @click="make('superscript')"
-        >
-          <i class="bi bi-superscript"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Inline Code"
-          @click="make('code-inline')"
-        >
-          <i class="bi bi-code"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Keyboard"
-          @click="make('keyboard')"
-        >
-          <i class="bi bi-keyboard"></i>
-        </button>
-      </div>
-
-      <div class="btn-group" role="group" aria-label="Code Blocks">
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Code Block"
-          @click="make('code')"
-        >
-          <i class="bi bi-code-slash"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Executable Code"
-          @click="make('code-executable')"
-        >
-          <i class="bi bi-terminal"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Executable Code Project"
-          @click="make('code-project')"
-        >
-          <i class="bi bi-terminal-split"></i>
-        </button>
-      </div>
-
-      <div class="btn-group" role="group" aria-label="Block types">
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Quote"
-          @click="make('quote')"
-        >
-          <i class="bi bi-quote"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="List"
-          @click="make('list-unordered')"
-        >
-          <i class="bi bi-list-ul"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Numbered List"
-          @click="make('list-ordered')"
-        >
-          <i class="bi bi-list-ol"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Check List"
-          @click="make('list-check')"
-        >
-          <i class="bi bi-check-square"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Table"
-          @click="make('table')"
-        >
-          <i class="bi bi-table"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Horizontal Line"
-          @click="make('line')"
-        >
-          <i class="bi bi-hr"></i>
-        </button>
-      </div>
-
-      <div class="btn-group" role="group" aria-label="Embed or Link to Multimedia">
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Link"
-          @click="make('link')"
-        >
-          <i class="bi bi-link-45deg"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Image"
-          @click="make('image')"
-        >
-          <i class="bi bi-image"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Audio"
-          @click="make('audio')"
-        >
-          <i class="bi bi-music-note-beamed"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Movie"
-          @click="make('movie')"
-        >
-          <i class="bi bi-film"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Try to embed any kind of link"
-          @click="make('oembed')"
-        >
-          <i class="bi bi-puzzle"></i>
-        </button>
-      </div>
-
-      <input type="file" id="imageInput" style="display: none" accept="image/*" />
-      <input type="file" id="audioInput" style="display: none" accept="audio/*" />
-      <input type="file" id="movieInput" style="display: none" accept="video/*" />
-      <div class="btn-group" role="group" aria-label="Upload Multiline">
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Upload Image"
-          @click="make('upload-image')"
-        >
-          <i class="bi bi-upload"></i>
-          <i class="bi bi-image icon-overlay"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Upload Audio"
-          @click="make('upload-audio')"
-        >
-          <i class="bi bi-upload"></i>
-          <i class="bi bi-music-note-beamed icon-overlay"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Upload Movie"
-          @click="make('upload-movie')"
-        >
-          <i class="bi bi-upload"></i>
-          <i class="bi bi-film icon-overlay"></i>
-        </button>
-      </div>
-
-      <div class="btn-group" role="group" aria-label="LiaScript Effects">
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Animation"
-          @click="make('animation')"
-        >
-          <i class="bi bi-lightning-fill"></i>
-          <i class="bi bi-easel icon-overlay"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Comment"
-          @click="make('comment')"
-        >
-          <i class="bi bi-chat-text"></i>
-          <i class="bi bi-easel icon-overlay"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Speak out loud"
-          @click="make('tts')"
-        >
-          <i class="bi bi-play-circle"></i>
-          <i class="bi bi-easel icon-overlay"></i>
-        </button>
-      </div>
-
-      <div class="btn-group" role="group" aria-label="Quizzes">
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Single Choice Quiz"
-          @click="make('quiz-single-choice')"
-        >
-          <i class="bi bi-x-circle"></i>
-          <i class="bi bi-question-lg icon-overlay"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Multiple Choice Quiz"
-          @click="make('quiz-multiple-choice')"
-        >
-          <i class="bi bi-x-square"></i>
-          <i class="bi bi-question-lg icon-overlay"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Text Input Quiz"
-          @click="make('quiz-input')"
-        >
-          <i class="bi bi-input-cursor-text"></i>
-          <i class="bi bi-question-lg icon-overlay"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Selection Quiz"
-          @click="make('quiz-selection')"
-        >
-          <i class="bi bi-option"></i>
-          <i class="bi bi-question-lg icon-overlay"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Matrix Quiz"
-          @click="make('quiz-matrix')"
-        >
-          <i class="bi bi-grid-3x3-gap"></i>
-          <i class="bi bi-question-lg icon-overlay"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Gap Text"
-          @click="make('quiz-gap-text')"
-        >
-          <i class="bi bi-body-text"></i>
-          <i class="bi bi-question-lg icon-overlay"></i>
-        </button>
-      </div>
-
-      <div class="btn-group" role="group" aria-label="Formulas with KaTeX">
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Inline Formula"
-          @click="make('formula-inline')"
-        >
-          <i class="bi bi-currency-dollar"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Formula Block"
-          @click="make('formula')"
-        >
-          <i class="bi bi-currency-dollar"></i>
-          <i class="bi bi-currency-dollar icon-overlay"></i>
-        </button>
-      </div>
-
-      <div class="btn-group" role="group" aria-label="ASCII-art drawings">
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Graph"
-          @click="make('graph')"
-        >
-          <i class="bi bi-graph-down"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="ASCII-Art"
-          @click="make('ascii')"
-        >
-          <i class="bi bi-boxes"></i>
-        </button>
-      </div>
-
-      <div class="btn-group" role="group" aria-label="MathJS helpers">
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="MathJS - Evaluate Expression (Ctrl+E)"
-          @click="make('mathjs-evaluate')"
-        >
-          <i class="bi bi-gear"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="MathJS - Simplify Expression (Ctrl+M)"
-          @click="make('mathjs-simplify')"
-        >
-          <i class="bi bi-gear"></i>
-          <i class="bi bi-lightning-charge icon-overlay"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="MathJS - Convert to TeX (Ctrl+O)"
-          @click="make('mathjs-tex')"
-        >
-          <i class="bi bi-gear"></i>
-          <i class="bi icon-overlay">TeX</i>
-        </button>
-      </div>
-
-      <div class="btn-group" role="group">
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Initialize empty document"
-          @click="make('init')"
-        >
-          <i class="bi bi-rocket-takeoff"></i>
-        </button>
-      </div>
-
-      <div class="btn-group" role="group">
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Open audio recorder"
-          @click="recorder.audio = true"
-        >
-          <i class="bi bi-mic"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Open webcam recorder"
-          @click="recorder.webcam = true"
-        >
-          <i class="bi bi-webcam"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Open desktop recorder"
-          @click="recorder.desktop = true"
-        >
-          <i class="bi bi-camera-reels"></i>
-        </button>
+          class="btn-close"
+          aria-label="Close"
+          style="position: absolute; z-index: 101; right: 12px; top: 10px"
+          @click="recorder.audio = false"
+        ></button>
+        <audio-recorder :attempts="3" :time="2" :customUploader="storeAudioFile" />
       </div>
     </div>
 
-    <div class="btn-toolbar editor-zoom-toolbar" role="toolbar" aria-label="Editor zoom toolbar">
-      <div class="btn-group" role="group" aria-label="Editor font zoom">
+    <div
+      style="
+        z-index: 100;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+      "
+      v-if="recorder.webcam"
+    >
+      <div>
         <button
-          class="btn btn-sm btn-outline-secondary"
           type="button"
-          title="Editor Font Zoom In"
-          @click="zoomIn()"
-        >
-          <i class="bi bi-plus-lg"></i>
-        </button>
-
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          type="button"
-          title="Editor Font Zoom Out"
-          @click="zoomOut()"
-        >
-          <i class="bi bi-dash-lg"></i>
-        </button>
+          class="btn-close"
+          aria-label="Close"
+          style="position: absolute; z-index: 101; right: 12px; top: 10px"
+          @click="recorder.webcam = false"
+        ></button>
+        <Recorder :storeBlob="storeVideoFile" stream="webcam" />
       </div>
     </div>
-  </nav>
 
-  <div
-    style="
-      z-index: 100;
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-    "
-    v-if="recorder.audio"
-  >
-    <div>
-      <button
-        type="button"
-        class="btn-close"
-        aria-label="Close"
-        style="position: absolute; z-index: 101; right: 12px; top: 10px"
-        @click="recorder.audio = false"
-      ></button>
-      <audio-recorder :attempts="3" :time="2" :customUploader="storeAudioFile" />
+    <div
+      style="
+        z-index: 100;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+      "
+      v-if="recorder.desktop"
+    >
+      <div>
+        <button
+          type="button"
+          class="btn-close"
+          aria-label="Close"
+          style="position: absolute; z-index: 101; right: 12px; top: 10px"
+          @click="recorder.desktop = false"
+        ></button>
+        <Recorder :storeBlob="storeVideoFile" stream="desktop" />
+      </div>
     </div>
+
+    <div id="liascript-editor"></div>
   </div>
-
-  <div
-    style="
-      z-index: 100;
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-    "
-    v-if="recorder.webcam"
-  >
-    <div>
-      <button
-        type="button"
-        class="btn-close"
-        aria-label="Close"
-        style="position: absolute; z-index: 101; right: 12px; top: 10px"
-        @click="recorder.webcam = false"
-      ></button>
-      <Recorder :storeBlob="storeVideoFile" stream="webcam" />
-    </div>
-  </div>
-
-  <div
-    style="
-      z-index: 100;
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-    "
-    v-if="recorder.desktop"
-  >
-    <div>
-      <button
-        type="button"
-        class="btn-close"
-        aria-label="Close"
-        style="position: absolute; z-index: 101; right: 12px; top: 10px"
-        @click="recorder.desktop = false"
-      ></button>
-      <Recorder :storeBlob="storeVideoFile" stream="desktop" />
-    </div>
-  </div>
-
-  <div id="liascript-editor"></div>
 </template>
 
 <style>
+.editor-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.editor-shell[translate='no'],
+.editor-shell[translate='no'] * {
+  translate: no;
+}
+
 #liascript-editor {
-  height: 100vh;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
 }
 
 .editor-toolbar {
+  --editor-toolbar-bg: var(--bs-body-bg);
   border-top: 2px solid var(--bs-border-color);
   border-bottom: 2px solid var(--bs-border-color);
   padding: 0;
@@ -2217,12 +2024,40 @@ I (study) ~[[ am going to study ]]~ harder this term.
   align-items: stretch;
 }
 
+.editor-toolbar.navbar-dark {
+  --editor-toolbar-bg: #323232;
+  background-color: #323232 !important;
+}
+
 .btn-sm {
-  padding: 0.4rem 0.75rem 0.2rem 0.75rem;
+  padding: 0.5rem 0.8rem 0.35rem 0.8rem;
 }
 
 .btn-group {
   margin: 0.1rem 0.3rem 0.1rem 0.2rem;
+}
+
+.editor-toolbar .btn-outline-secondary,
+.editor-toolbar .btn-group > .btn {
+  border-width: 2px;
+}
+
+.editor-toolbar .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.8rem;
+  min-height: 2.5rem;
+}
+
+.editor-toolbar .btn > .bi,
+.editor-toolbar .btn > i:not(.icon-overlay) {
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.editor-toolbar .btn > .icon-overlay {
+  font-size: 0.95rem !important;
 }
 
 .ar-icon {
@@ -2235,7 +2070,7 @@ I (study) ~[[ am going to study ]]~ harder this term.
 
 @media (max-width: 896px) {
   .btn-sm {
-    padding: 0.1rem 0.25rem 0px 0.15rem;
+    padding: 0.2rem 0.45rem 0.1rem 0.35rem;
   }
 
   .btn-group {
@@ -2250,8 +2085,123 @@ I (study) ~[[ am going to study ]]~ harder this term.
 }
 
 .editor-main-toolbar,
+.editor-category-toolbar,
 .editor-zoom-toolbar {
   width: 100%;
+}
+
+.editor-category-toolbar {
+  align-items: flex-end;
+  padding: 0.75rem 1.35rem 0 1.35rem;
+  overflow-x: auto;
+  overflow-y: visible;
+  gap: 0.85rem;
+  position: relative;
+}
+
+.editor-category-group {
+  --editor-tab-active-offset: 0px;
+  display: inline-flex;
+  flex-wrap: nowrap;
+  padding: 0;
+  gap: 0.9rem;
+  position: relative;
+  isolation: isolate;
+}
+
+.editor-category-group .btn {
+  min-width: auto;
+  min-height: 2.75rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  border-top-left-radius: 1.15rem;
+  border-top-right-radius: 1.15rem;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  position: relative;
+  top: 0;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease,
+    background-color 0.12s ease;
+  border-width: 2px;
+  padding-inline: 1.3rem;
+  padding-top: 0.6rem !important;
+  padding-bottom: 0.72rem !important;
+  background-color: rgba(255, 255, 255, 0.02);
+  color: #38cccc;
+  box-shadow: inset 0 0 0 1px rgba(56, 204, 204, 0.12);
+  line-height: 1.05;
+}
+
+.editor-category-group .btn.btn-primary,
+.editor-category-group .btn.btn-outline-secondary {
+  min-height: 2.75rem !important;
+  height: auto !important;
+  padding-top: 0.6rem !important;
+  padding-bottom: 0.72rem !important;
+}
+
+.editor-category-group .btn.btn-outline-secondary {
+  opacity: 0.92;
+  border-color: rgba(56, 204, 204, 0.9);
+}
+
+.editor-category-group .btn.btn-outline-secondary:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+  background-color: rgba(56, 204, 204, 0.1);
+}
+
+.editor-category-group .btn.btn-primary {
+  background-color: #38cccc;
+  color: #0f2c2c;
+  border-color: #38cccc;
+  box-shadow: 0 -0.15rem 0.4rem rgba(56, 204, 204, 0.18);
+  top: var(--editor-tab-active-offset);
+  margin-bottom: calc(-1 * var(--editor-tab-active-offset));
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  z-index: 3;
+}
+
+.editor-category-group .btn.btn-primary::before,
+.editor-category-group .btn.btn-primary::after {
+  content: none;
+}
+
+.editor-category-group .btn.btn-primary::before {
+  left: auto;
+}
+
+.editor-category-group .btn.btn-primary::after {
+  right: auto;
+}
+
+.editor-toolbar.navbar-dark .editor-category-group .btn.btn-primary {
+  background-color: #38cccc;
+  color: #0f2c2c;
+  border-color: #38cccc;
+  box-shadow: 0 -0.18rem 0.62rem rgba(56, 204, 204, 0.34);
+}
+
+.editor-toolbar.navbar-dark .editor-category-group .btn.btn-primary::before,
+.editor-toolbar.navbar-dark .editor-category-group .btn.btn-primary::after {
+  background-color: var(--editor-toolbar-bg);
+}
+
+.editor-main-toolbar {
+  position: relative;
+  z-index: 2;
+  margin-top: -4px;
+  padding: 0.42rem 0.5rem 0.22rem 0.5rem;
+  border: 2px solid #38cccc;
+  border-radius: 1rem 1rem 0 0;
+  background-color: var(--editor-toolbar-bg);
+  box-shadow: 0 0.2rem 0.75rem rgba(56, 204, 204, 0.1);
+}
+
+.editor-toolbar.navbar-dark .editor-main-toolbar {
+  background-color: #323232;
+  border-color: #38cccc;
 }
 
 .editor-zoom-toolbar {
@@ -2259,9 +2209,10 @@ I (study) ~[[ am going to study ]]~ harder this term.
 }
 
 .icon-overlay {
-  top: -8px;
-  scale: 0.5;
-  left: -3px;
+  top: -0.7rem;
+  left: -0.3rem;
+  font-size: 0.95rem !important;
+  scale: 1;
   position: relative;
   display: inline-block;
   width: 0px;

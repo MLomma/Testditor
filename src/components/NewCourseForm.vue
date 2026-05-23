@@ -12,6 +12,10 @@ export default {
       type: String,
       default: "modal",
     },
+    ui: {
+      type: Object,
+      default: () => ({}),
+    },
   },
   emits: ["create"],
 
@@ -26,6 +30,10 @@ export default {
   },
 
   methods: {
+    text(key: string, fallback: string) {
+      return (this.ui && this.ui[key]) || fallback;
+    },
+
     isInline() {
       return this.variant === "inline";
     },
@@ -36,14 +44,14 @@ export default {
 
     linkLabel(index: number) {
       if (index === 0) {
-        return "Link";
+        return this.text("linkLabel", "Link");
       }
 
       if (index === 1) {
-        return "Second Link";
+        return this.text("secondLinkLabel", "Second Link");
       }
 
-      return `Link ${index + 1}`;
+      return `${this.text("linkLabel", "Link")} ${index + 1}`;
     },
 
     linkId(index: number) {
@@ -64,6 +72,10 @@ export default {
 
     additionalLinks() {
       return this.links.slice(1);
+    },
+
+    optionalMergeLinkPlaceholder(index: number) {
+      return `${this.text("optionalMergeLinkPrefix", "Optional merge link")} ${index + 1}`;
     },
 
     submit() {
@@ -87,19 +99,19 @@ export default {
 <template>
   <div>
     <div :class="isInline() ? 'mb-2' : 'mb-3'">
-      <label class="form-label" :for="fieldId('author')">Author name</label>
+      <label class="form-label" :for="fieldId('author')">{{ text("authorName", "Author name") }}</label>
       <input
         :id="fieldId('author')"
         v-model="author"
         type="text"
         class="form-control"
-        placeholder="Your name"
+        :placeholder="text('yourName', 'Your name')"
         @keyup.enter="submit"
       />
     </div>
 
     <div>
-      <label class="form-label" :for="fieldId('language')">Language</label>
+      <label class="form-label" :for="fieldId('language')">{{ text("language", "Language") }}</label>
       <select
         :id="fieldId('language')"
         v-model="language"
@@ -121,7 +133,7 @@ export default {
       :class="isInline() ? 'mt-2' : 'mt-3'"
     >
       <label class="form-label" :for="linkId(index)">
-        {{ index === 0 ? 'Import course content from this link' : linkLabel(index) }}
+        {{ index === 0 ? text('importLinkLabel', 'Import course content from this link') : linkLabel(index) }}
       </label>
       <input
         :id="linkId(index)"
@@ -130,8 +142,8 @@ export default {
         class="form-control"
         :placeholder="
           index === 0
-            ? 'Optional link to a Markdown file'
-            : `Optional merge link ${index + 1}`
+            ? text('optionalMarkdownLink', 'Optional link to a Markdown file')
+            : optionalMergeLinkPlaceholder(index + 1)
         "
         @keyup.enter="submit"
       />
@@ -150,7 +162,7 @@ export default {
         v-model="links[localIndex + 1]"
         type="url"
         class="form-control"
-        :placeholder="`Optional merge link ${localIndex + 2}`"
+        :placeholder="optionalMergeLinkPlaceholder(localIndex + 2)"
         @keyup.enter="submit"
       />
     </div>
@@ -158,8 +170,8 @@ export default {
     <button
       type="button"
       class="new-course-add-button mt-4"
-      aria-label="Add another merge link"
-      title="Add another merge link"
+      :aria-label="text('addMergeLink', 'Add another merge link')"
+      :title="text('addMergeLink', 'Add another merge link')"
       @click="addLinkField"
     >
       <span class="new-course-add-button__line" aria-hidden="true"></span>
@@ -176,7 +188,7 @@ export default {
         :disabled="author.trim().length === 0"
         @click="submit"
       >
-        <span class="new-course-submit-button__label">Create</span>
+        <span class="new-course-submit-button__label">{{ text('create', 'Create') }}</span>
       </button>
     </div>
 
@@ -187,7 +199,7 @@ export default {
         :disabled="author.trim().length === 0"
         @click="submit"
       >
-        <span class="new-course-submit-button__label">Create new course</span>
+        <span class="new-course-submit-button__label">{{ text('createNewCourseButton', 'Create new course') }}</span>
       </button>
     </div>
   </div>
@@ -210,7 +222,7 @@ export default {
 
 .new-course-add-button:hover,
 .new-course-add-button:focus-visible {
-  filter: drop-shadow(0 0 0.45rem rgba(20, 115, 117, 0.76));
+  filter: drop-shadow(0 0 0.45rem rgba(56, 204, 204, 0.76));
   transform: translateY(-1px) scaleX(1.035) scaleY(1.08);
   outline: none;
 }

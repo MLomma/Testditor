@@ -8,6 +8,10 @@ export default {
       type: Boolean,
       default: false,
     },
+    ui: {
+      type: Object,
+      default: () => ({}),
+    },
   },
   emits: ["close", "create"],
 
@@ -34,17 +38,17 @@ export default {
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title">Create New Course</h5>
+          <h5 class="modal-title">{{ ui.createNewCourseTitle || 'Create New Course' }}</h5>
           <button
             type="button"
             class="btn-close"
-            aria-label="Close"
+            :aria-label="ui.close || 'Close'"
             @click="close"
           ></button>
         </div>
 
         <div class="modal-body">
-          <NewCourseForm id-prefix="new-course-modal" @create="$emit('create', $event)" />
+          <NewCourseForm id-prefix="new-course-modal" :ui="ui" @create="$emit('create', $event)" />
         </div>
       </div>
     </div>

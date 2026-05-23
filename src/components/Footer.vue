@@ -7,7 +7,7 @@
     </p>
 
     <small>
-      Follow us on:
+      {{ socialLabel }}
       <a href="https://github.com/LiaScript" target="_blank" title="LiaScript on GitHub">
         <i class="bi bi-github"></i>
       </a>
@@ -37,3 +37,14 @@
     </small>
   </div>
 </template>
+
+<script lang="ts">
+export default {
+  props: {
+    socialLabel: {
+      type: String,
+      default: 'Follow us on:',
+    },
+  },
+}
+</script>

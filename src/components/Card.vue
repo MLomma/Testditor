@@ -75,6 +75,7 @@ export default {
     "cardComment",
     "cardGist",
     "cardTags",
+    "ui",
   ],
   emits: ["drop"],
 
@@ -116,6 +117,10 @@ export default {
   },
 
   methods: {
+    text(key: string, fallback: string) {
+      return (this.$props.ui && this.$props.ui[key]) || fallback;
+    },
+
     drop() {
       this.$emit("drop", this.$props.cardId);
     },
@@ -153,6 +158,7 @@ export default {
         type="button"
         class="btn btn-close btn-secondary"
         aria-label="Delete"
+        :aria-label="text('deleteAria', 'Delete')"
         data-bs-toggle="modal"
         :data-bs-target="`#${modalId}`"
         style="
@@ -176,12 +182,12 @@ export default {
         "
         class="mb-0 text-muted"
       >
-        <small>ID: {{ cardId }}</small>
+        <small>{{ text('idLabel', 'ID') }}: {{ cardId }}</small>
       </p>
       <div class="card-body" style="margin-bottom: -16px">
         <div class="d-flex justify-content-between">
           <h6 class="h6 text-truncate" style="margin-right: 10px">
-            {{ cardTitle || "Untitled" }}
+            {{ cardTitle || text('untitled', 'Untitled') }}
           </h6>
         </div>
       </div>
@@ -203,7 +209,7 @@ export default {
 
         <div :hidden="cardGist ? false : true">
           <hr />
-          <small> Exports: </small>
+          <small> {{ text('exports', 'Exports') }}: </small>
 
           <p class="mb-0">
             <small>
@@ -220,8 +226,11 @@ export default {
           </small>
         </p>
         <div class="col gap-2 d-sm-flex justify-content-end p-1">
-          <a :href="'./?/edit/' + cardId" class="btn btn-primary btn-sm" data-link="true"
-            >Edit</a
+          <a
+            :href="'./?/edit/' + cardId"
+            class="btn btn-primary btn-sm overview-card-edit-button"
+            data-link="true"
+            >{{ text('edit', 'Edit') }}</a
           >
         </div>
       </div>
@@ -239,7 +248,7 @@ export default {
       <div class="modal-content border-danger mb-5" style="border-width: 3px">
         <div class="modal-header">
           <h5 class="modal-title" :id="`${modalId}-label`">
-            Delete: "{{ cardTitle || "Untitled" }}"
+            {{ text('deleteTitlePrefix', 'Delete') }}: "{{ cardTitle || text('untitled', 'Untitled') }}"
           </h5>
           <button
             type="button"
@@ -249,13 +258,13 @@ export default {
           ></button>
         </div>
         <div class="modal-body">
-          Are you sure you that want to delete this document forever?
+          {{ text('deleteConfirmLine1', 'Are you sure that you want to delete this document forever?') }}
           <br />
-          It cannot be restored!
+          {{ text('deleteConfirmLine2', 'It cannot be restored!') }}
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-            Abort
+            {{ text('abort', 'Abort') }}
           </button>
           <button
             type="button"
@@ -263,13 +272,19 @@ export default {
             data-bs-dismiss="modal"
             @click="drop"
           >
-            Delete
+            {{ text('delete', 'Delete') }}
           </button>
         </div>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.overview-card-edit-button {
+  font-weight: 700 !important;
+}
+</style>
 
 <style scoped>
 .card:hover {

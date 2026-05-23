@@ -10,101 +10,20 @@ import { IndexeddbPersistence } from "y-indexeddb";
 
 import MiniSearch from "minisearch";
 import * as Utils from "../ts/utils";
+import {
+  OVERVIEW_TRANSLATION_LANGUAGES,
+  OVERVIEW_TRANSLATION_RELOAD_KEY,
+  clearOverviewTranslationCookie,
+  getOverviewUi,
+  normalizeOverviewLanguage,
+  readOverviewTranslationCookie,
+  readStoredOverviewLanguage,
+  supportsNativeOverviewLanguage,
+  writeOverviewTranslationCookie,
+  writeStoredOverviewLanguage,
+} from "../ts/overviewI18n";
 
 import logoImg from "url:../../assets/logo.png";
-
-const OVERVIEW_TRANSLATION_LANGUAGES = [
-  { code: "en", label: "English" },
-  { code: "de", label: "Deutsch" },
-  { code: "es", label: "Spanish" },
-  { code: "fr", label: "French" },
-  { code: "it", label: "Italian" },
-  { code: "nl", label: "Dutch" },
-  { code: "pt", label: "Portuguese" },
-  { code: "ru", label: "Russian" },
-  { code: "uk", label: "Ukrainian" },
-  { code: "ar", label: "Arabic" },
-  { code: "bg", label: "Bulgarian" },
-  { code: "fa", label: "Persian" },
-  { code: "hi", label: "Hindi" },
-  { code: "ja", label: "Japanese" },
-  { code: "ko", label: "Korean" },
-  { code: "sw", label: "Swahili" },
-  { code: "zh-CN", label: "Chinese (Simplified)" },
-  { code: "zh-TW", label: "Chinese (Traditional)" },
-].sort((left, right) =>
-  left.label.localeCompare(right.label, undefined, { sensitivity: "base" })
-);
-
-const OVERVIEW_TRANSLATION_COOKIE = "googtrans";
-const OVERVIEW_TRANSLATION_RELOAD_KEY = "overview-translation-reload";
-
-function normalizeOverviewLanguage(language?: string) {
-  if (!language) {
-    return "en";
-  }
-
-  const normalized = language.toLowerCase();
-  const aliases: Record<string, string> = {
-    de: "de",
-    en: "en",
-    es: "es",
-    fr: "fr",
-    it: "it",
-    nl: "nl",
-    pt: "pt",
-    ru: "ru",
-    ua: "uk",
-    uk: "uk",
-    ar: "ar",
-    bg: "bg",
-    fa: "fa",
-    hi: "hi",
-    ja: "ja",
-    ko: "ko",
-    sw: "sw",
-    zh: "zh-CN",
-    "zh-cn": "zh-CN",
-    "zh-tw": "zh-TW",
-    tw: "zh-TW",
-  };
-
-  const direct = aliases[normalized];
-  if (direct) {
-    return direct;
-  }
-
-  const short = normalized.split("-")[0];
-  return aliases[short] || "en";
-}
-
-function readOverviewTranslationCookie() {
-  const cookie = document.cookie
-    .split(";")
-    .map((entry) => entry.trim())
-    .find((entry) => entry.startsWith(`${OVERVIEW_TRANSLATION_COOKIE}=`));
-
-  if (!cookie) {
-    return null;
-  }
-
-  const value = decodeURIComponent(cookie.split("=")[1] || "");
-  const targetLanguage = value.split("/").filter(Boolean)[1];
-
-  return targetLanguage || null;
-}
-
-function writeOverviewTranslationCookie(language: string) {
-  const value = `/en/${language}`;
-  const encoded = encodeURIComponent(value);
-
-  document.cookie = `${OVERVIEW_TRANSLATION_COOKIE}=${encoded}; path=/; SameSite=Lax`;
-
-  const hostname = window.location.hostname;
-  if (hostname && hostname !== "localhost" && !/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
-    document.cookie = `${OVERVIEW_TRANSLATION_COOKIE}=${encoded}; path=/; domain=.${hostname}; SameSite=Lax`;
-  }
-}
 
 function waitForSync(provider) {
   return new Promise<void>((resolve) => {
@@ -191,6 +110,10 @@ export default {
       return this.lights ? "bi bi-sun" : "bi bi-moon";
     },
 
+    overviewUi() {
+      return getOverviewUi(this.translationLanguage);
+    },
+
     currentTranslationLabel() {
       return this.translationLanguage.split("-")[0].toUpperCase();
     },
@@ -214,12 +137,30 @@ export default {
   },
 
   methods: {
+    sanitizeModalText(value) {
+      return String(value ?? "")
+        .replace(/\uFFFD/g, "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    },
+
     syncTheme() {
       const theme = this.lights ? "light" : "dark";
+      const backgroundColor = this.lights ? "" : "#323232";
 
       document.documentElement.setAttribute("data-bs-theme", theme);
       document.body.setAttribute("data-bs-theme", theme);
       document.body.classList.add("bg-body", "text-body");
+      document.documentElement.style.backgroundColor = backgroundColor;
+      document.body.style.backgroundColor = backgroundColor;
+
+      const app = document.getElementById("app");
+      if (app) {
+        app.style.backgroundColor = backgroundColor;
+      }
     },
 
     handleSearch() {
@@ -270,22 +211,22 @@ export default {
     },
 
     showNewFunctions() {
+      const items = this.overviewUi.newFunctionsItems
+        .map(
+          (item) =>
+            `<li><strong>${this.sanitizeModalText(item.title)}:</strong> ${this.sanitizeModalText(item.description)}</li>`
+        )
+        .join("");
+
       this.$refs.modal.show(
-        "New Functions",
+        this.sanitizeModalText(this.overviewUi.newFunctionsTitle),
         `
         <p class="mb-3">
-          These additions are currently proof of principles and nothing more.
-          They are meant to demonstrate the workflows directly inside the LiveEditor.
+          ${this.sanitizeModalText(this.overviewUi.newFunctionsIntro)}
         </p>
 
         <ul class="mb-0">
-          <li><strong>Start dialog:</strong> A new course overlay now asks for your name, language, and merge links before the editor opens.</li>
-          <li><strong>Dark mode:</strong> The overview and editor now support direct light and dark mode switching.</li>
-          <li><strong>Drag and drop into the editor:</strong> Media such as images, audio, and video can be dropped directly into the editor.</li>
-          <li><strong>More user-friendly editor controls:</strong> Plus and minus buttons in the editor improve handling and make common actions easier to access.</li>
-          <li><strong>Dragging in the live preview:</strong> At least images can now be reordered directly inside the preview area.</li>
-          <li><strong>Merging multiple links before start:</strong> Several Markdown links can be entered before opening a new course and merged into one document.</li>
-          <li><strong>Merging by drag and drop into the editor:</strong> Dropping a Markdown link into the editor now merges it with the current document instead of only inserting content.</li>
+          ${items}
         </ul>
         `
       );
@@ -313,13 +254,28 @@ export default {
     initOverviewTranslation() {
       const cookieLanguage = readOverviewTranslationCookie();
       const suggestedLanguage = normalizeOverviewLanguage(
-        cookieLanguage ||
+        readStoredOverviewLanguage() ||
+          cookieLanguage ||
           (Array.isArray(navigator.languages) ? navigator.languages[0] : "") ||
           navigator.language ||
           document.documentElement.lang
       );
 
       this.translationLanguage = suggestedLanguage;
+      writeStoredOverviewLanguage(suggestedLanguage);
+
+      if (supportsNativeOverviewLanguage(suggestedLanguage)) {
+        if (cookieLanguage && cookieLanguage !== "en") {
+          clearOverviewTranslationCookie();
+          sessionStorage.removeItem(OVERVIEW_TRANSLATION_RELOAD_KEY);
+          window.location.reload();
+          return;
+        }
+
+        sessionStorage.removeItem(OVERVIEW_TRANSLATION_RELOAD_KEY);
+        this.translationReady = false;
+        return;
+      }
 
       if (cookieLanguage !== suggestedLanguage) {
         writeOverviewTranslationCookie(suggestedLanguage);
@@ -386,15 +342,32 @@ export default {
     },
 
     changeOverviewLanguage(language: string) {
-      if (language === this.translationLanguage) {
+      const normalizedLanguage = normalizeOverviewLanguage(language);
+
+      if (normalizedLanguage === this.translationLanguage) {
         this.translationDropdownOpen = false;
         return;
       }
 
-      this.translationLanguage = language;
+      const cookieLanguage = readOverviewTranslationCookie();
+
+      this.translationLanguage = normalizedLanguage;
       this.translationDropdownOpen = false;
-      writeOverviewTranslationCookie(language);
-      sessionStorage.setItem(OVERVIEW_TRANSLATION_RELOAD_KEY, language);
+      writeStoredOverviewLanguage(normalizedLanguage);
+
+      if (supportsNativeOverviewLanguage(normalizedLanguage)) {
+        clearOverviewTranslationCookie();
+        sessionStorage.removeItem(OVERVIEW_TRANSLATION_RELOAD_KEY);
+
+        if (cookieLanguage && cookieLanguage !== "en") {
+          window.location.reload();
+        }
+
+        return;
+      }
+
+      writeOverviewTranslationCookie(normalizedLanguage);
+      sessionStorage.setItem(OVERVIEW_TRANSLATION_RELOAD_KEY, normalizedLanguage);
       window.location.reload();
     },
 
@@ -488,8 +461,14 @@ export default {
 </script>
 
 <template>
-  <div :data-bs-theme="lights ? 'light' : 'dark'" class="bg-body text-body min-vh-100">
-    <nav class="navbar navbar-expand-lg" :class="lights ? 'navbar-light bg-light' : 'navbar-dark bg-dark'">
+  <div
+    :data-bs-theme="lights ? 'light' : 'dark'"
+    :class="['overview-page', lights ? 'overview-page--light' : 'overview-page--dark']"
+  >
+    <nav
+      class="navbar navbar-expand-lg overview-nav"
+      :class="lights ? 'navbar-light bg-light' : 'navbar-dark bg-dark'"
+    >
       <div class="container-fluid">
         <div class="d-flex align-items-center gap-3">
           <a class="navbar-brand mb-0">
@@ -502,7 +481,7 @@ export default {
             class="btn btn-primary overview-action-button"
             @click="showNewFunctions"
           >
-            <span class="overview-action-button__label">New Functions</span>
+            <span class="overview-action-button__label">{{ overviewUi.newFunctionsButton }}</span>
           </button>
         </div>
 
@@ -511,7 +490,7 @@ export default {
             type="button"
             class="btn btn-outline-secondary px-3 toolbar-outline-button overview-action-button"
             @click="switchLights()"
-            title="Switch between light and dark mode"
+            :title="overviewUi.switchThemeTitle"
           >
             <span class="overview-action-button__label overview-action-button__label--icon">
               <i :class="lightMode"></i>
@@ -522,7 +501,7 @@ export default {
             <button
               type="button"
               class="btn btn-outline-secondary px-3 toolbar-outline-button overview-action-button"
-              title="Translate overview"
+              :title="overviewUi.translateOverviewTitle"
               @click="toggleTranslationDropdown"
             >
               <span class="overview-action-button__label">{{ currentTranslationLabel }}</span>
@@ -549,7 +528,7 @@ export default {
           </div>
 
           <button class="btn btn-primary overview-action-button" @click="newCourse">
-            <span class="overview-action-button__label">New Course</span>
+            <span class="overview-action-button__label">{{ overviewUi.newCourse }}</span>
           </button>
         </div>
       </div>
@@ -563,7 +542,7 @@ export default {
     >
     <div class="px-4 mt-4 mb-0">
       <div style="width: min(100%, 50rem); margin: 0 auto">
-        <NewCourseCard @create="newCourse" />
+        <NewCourseCard :ui="overviewUi" @create="createNewCourse" />
       </div>
     </div>
 
@@ -575,7 +554,7 @@ export default {
     <div class="input-group" style="padding: 0rem 5rem 0rem 5rem">
       <input
         class="form-control"
-        placeholder="Type to search..."
+        :placeholder="overviewUi.searchPlaceholder"
         @input="handleSearch"
         v-model="searchText"
         aria-label="Search input"
@@ -588,7 +567,7 @@ export default {
           style="border: 0px"
           type="button"
           @click="searchText = ''"
-          aria-label="Clear search"
+          :aria-label="overviewUi.clearSearch"
           :disabled="courses.length === 0 || searchText.length === 0"
         >
           <i class="bi bi-x-lg"> </i>
@@ -626,6 +605,7 @@ export default {
         :card-comment="item.meta.macro?.comment"
         :card-gist="item.meta.gist_url"
         :card-tags="item.meta.macro?.tags"
+        :ui="overviewUi"
         @drop="drop"
       />
     </div>
@@ -642,22 +622,25 @@ export default {
         :card-comment="item.meta.macro?.comment"
         :card-gist="item.meta.gist_url"
         :card-tags="item.meta.macro?.tags"
+        :ui="overviewUi"
         @drop="drop"
       />
     </div>
 
-    <Footer>
-      This is a collaborative online editor for
-      <a href="https://LiaScript.github.io" target="_blank">LiaScript</a>. All content is
-      stored only within your browser. If you need some inspiration, check out some of our
-      <a href="./examples.html">examples</a>, search for embeddable
-      <a href="https://github.com/topics/liascript-template" target="_blank">templates</a
-      >, or already published
-      <a href="https://github.com/topics/liascript-course" target="_blank">courses</a>.
+    <Footer :social-label="overviewUi.followUsOn">
+      {{ overviewUi.footerBeforeExamples }}
+      <a href="https://LiaScript.github.io" target="_blank">LiaScript</a>
+      {{ overviewUi.footerBetweenExamplesAndTemplates }}
+      <a href="./examples.html">{{ overviewUi.examples }}</a>
+      {{ overviewUi.footerBetweenTemplatesAndCourses }}
+      <a href="https://github.com/topics/liascript-template" target="_blank">{{ overviewUi.templates }}</a>
+      {{ overviewUi.footerAfterCourses }}
+      <a href="https://github.com/topics/liascript-course" target="_blank">{{ overviewUi.courses }}</a>{{ overviewUi.footerEnd }}
     </Footer>
 
       <NewCourseModal
         :visible="showNewCourseModal"
+        :ui="overviewUi"
         @close="showNewCourseModal = false"
         @create="createNewCourse"
       />
@@ -681,6 +664,7 @@ export default {
   padding-top: 6px !important;
   padding-bottom: 6px !important;
   line-height: 1;
+  font-weight: 700;
   text-align: center;
   box-sizing: border-box;
   white-space: nowrap;
@@ -708,9 +692,23 @@ export default {
   line-height: 1;
 }
 
+.overview-page {
+  min-height: 100vh;
+}
+
+.overview-page--dark,
+.overview-page--dark .container-fluid,
+.overview-page--dark .bg-body {
+  background-color: #323232 !important;
+}
+
 .overview-divider {
-  border-top: 2px solid #147375;
+  border-top: 2px solid #38cccc;
   opacity: 1;
+}
+
+.overview-nav.navbar-dark {
+  background-color: #323232 !important;
 }
 
 .overview-translation-menu {
@@ -721,7 +719,7 @@ export default {
   min-width: 15rem;
   max-height: 20rem;
   overflow: auto;
-  border-color: #147375 !important;
+  border-color: #38cccc !important;
 }
 
 .overview-translation-item {
@@ -734,13 +732,13 @@ export default {
 .overview-translation-item.active,
 .overview-translation-item:active,
 .overview-translation-item:hover {
-  background-color: rgba(20, 115, 117, 0.14);
+  background-color: rgba(56, 204, 204, 0.14);
   color: inherit;
 }
 
 .overview-translation-code {
   min-width: 2rem;
   font-weight: 700;
-  color: #147375;
+  color: #38cccc;
 }
 </style>
