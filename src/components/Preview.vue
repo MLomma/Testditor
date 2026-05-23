@@ -1,4 +1,11 @@
 <script lang="ts">
+const LIGHT_PREVIEW_ACCENT = "#147375";
+const DARK_PREVIEW_ACCENT = "#38CCCC";
+const LIGHT_PREVIEW_ACCENT_RGB = "20, 115, 117";
+const DARK_PREVIEW_ACCENT_RGB = "56, 204, 204";
+const PREVIEW_ACCENT_PLACEHOLDER = "__LIA_PREVIEW_ACCENT__";
+const PREVIEW_ACCENT_RGB_PLACEHOLDER = "__LIA_PREVIEW_ACCENT_RGB__";
+
 const INIT_CODE = `
 var blob = {};
 var previewDragState = null;
@@ -29,7 +36,7 @@ window.ensurePreviewBlockOutlineStyle = function () {
   style.textContent = [
     'main > .lia-preview-block {',
     '  position: relative;',
-    '  border: 2px dashed rgba(56, 204, 204, 0.7);',
+    '  border: 2px dashed rgba(${PREVIEW_ACCENT_RGB_PLACEHOLDER}, 0.7);',
     '  border-radius: 0.9rem;',
     '  padding: 1rem 1.1rem;',
     '  margin-block: 1rem;',
@@ -47,8 +54,8 @@ window.ensurePreviewBlockOutlineStyle = function () {
     '  right: -0.15rem;',
     '  height: 0.3rem;',
     '  border-radius: 999px;',
-    '  background: #38CCCC;',
-    '  box-shadow: 0 0 0.55rem rgba(56, 204, 204, 0.95), 0 0 1.1rem rgba(56, 204, 204, 0.55);',
+    '  background: ${PREVIEW_ACCENT_PLACEHOLDER};',
+    '  box-shadow: 0 0 0.55rem rgba(${PREVIEW_ACCENT_RGB_PLACEHOLDER}, 0.95), 0 0 1.1rem rgba(${PREVIEW_ACCENT_RGB_PLACEHOLDER}, 0.55);',
     '  pointer-events: none;',
     '}',
     'main > .lia-preview-block[data-lia-block-drop="before"]::before {',
@@ -290,82 +297,9 @@ window.getPreviewMediaContainer = function (elem) {
     if (wrapper) {
       return wrapper
     }
-
-    return elem.closest('audio, video, img')
-  }
+}
 
   return elem
-}
-
-window.bindPreviewReorder = function (elem) {
-  if (elem.dataset && elem.dataset.liaReorderBound === 'true') {
-    return
-  }
-
-  elem.draggable = true
-  elem.style.cursor = 'grab'
-
-  elem.addEventListener('dragstart', function (event) {
-    previewDragState = {
-      src: elem.dataset.liaSource,
-      occurrence: Number(elem.dataset.liaOccurrence || 0),
-    }
-
-    if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = 'move'
-      event.dataTransfer.setData('text/plain', elem.dataset.liaSource || '')
-    }
-  })
-
-  elem.addEventListener('dragover', function (event) {
-    if (!previewDragState) {
-      return
-    }
-
-    event.preventDefault()
-    event.stopPropagation()
-
-    if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = 'move'
-    }
-  })
-
-  elem.addEventListener('drop', function (event) {
-    if (!previewDragState || !elem.dataset.liaSource) {
-      return
-    }
-
-    event.preventDefault()
-    event.stopPropagation()
-
-    const rect = elem.getBoundingClientRect()
-    const position = event.clientY > rect.top + rect.height / 2 ? 'after' : 'before'
-
-    parent.postMessage(
-      {
-        cmd: 'preview.reorder',
-        param: {
-          draggedSrc: previewDragState.src,
-          draggedOccurrence: previewDragState.occurrence,
-          targetSrc: elem.dataset.liaSource,
-          targetOccurrence: Number(elem.dataset.liaOccurrence || 0),
-          position,
-        },
-      },
-      '*'
-    )
-
-    previewDragState = null
-  })
-
-  elem.addEventListener('dragend', function () {
-    previewDragState = null
-  })
-
-  if (elem.dataset) {
-    elem.dataset.liaReorderBound = 'true'
-  }
-}
 
 window.postPreviewReorder = function (target, clientY) {
   if (!previewDragState || !target || !target.dataset.liaSource) {
@@ -743,7 +677,13 @@ export default {
 
   emits: ["ready", "update", "goto", "reorder"],
 
-  props: { fetchError: Function },
+  props: {
+    fetchError: Function,
+    lights: {
+      type: Boolean,
+      default: false,
+    },
+  },
 
   data() {
     window.addEventListener(
@@ -793,6 +733,69 @@ export default {
   },
 
   methods: {
+    getPreviewAccentColor() {
+      return this.lights ? LIGHT_PREVIEW_ACCENT : DARK_PREVIEW_ACCENT;
+    },
+
+    getPreviewAccentRgb() {
+      return this.lights ? LIGHT_PREVIEW_ACCENT_RGB : DARK_PREVIEW_ACCENT_RGB;
+    },
+
+    getPreviewInitCode() {
+      return INIT_CODE.replaceAll(PREVIEW_ACCENT_PLACEHOLDER, this.getPreviewAccentColor()).replaceAll(
+        PREVIEW_ACCENT_RGB_PLACEHOLDER,
+        this.getPreviewAccentRgb()
+      );
+    },
+
+    getPreviewBlockOutlineCss() {
+      const accentColor = this.getPreviewAccentColor();
+      const accentRgb = this.getPreviewAccentRgb();
+
+      return [
+        "main > .lia-preview-block {",
+        "  position: relative;",
+        `  border: 2px dashed rgba(${accentRgb}, 0.7);`,
+        "  border-radius: 0.9rem;",
+        "  padding: 1rem 1.1rem;",
+        "  margin-block: 1rem;",
+        "  cursor: grab;",
+        "  transition: border-color 120ms ease, box-shadow 120ms ease, opacity 120ms ease;",
+        "}",
+        "main > .lia-preview-block[data-lia-block-dragging='true'] {",
+        "  cursor: grabbing;",
+        "  opacity: 0.72;",
+        "}",
+        "main > .lia-preview-block[data-lia-block-drop='before']::before,",
+        "main > .lia-preview-block[data-lia-block-drop='after']::after {",
+        "  content: '';",
+        "  position: absolute;",
+        "  left: -0.15rem;",
+        "  right: -0.15rem;",
+        "  height: 0.3rem;",
+        "  border-radius: 999px;",
+        `  background: ${accentColor};`,
+        `  box-shadow: 0 0 0.55rem rgba(${accentRgb}, 0.95), 0 0 1.1rem rgba(${accentRgb}, 0.55);`,
+        "  pointer-events: none;",
+        "}",
+        "main > .lia-preview-block[data-lia-block-drop='before']::before {",
+        "  top: -0.75rem;",
+        "}",
+        "main > .lia-preview-block[data-lia-block-drop='after']::after {",
+        "  bottom: -0.75rem;",
+        "}",
+        "main > .lia-preview-block:first-child {",
+        "  margin-top: 0.35rem;",
+        "}",
+        "main > .lia-preview-block > :first-child {",
+        "  margin-top: 0;",
+        "}",
+        "main > .lia-preview-block > :last-child {",
+        "  margin-bottom: 0;",
+        "}",
+      ].join("\n");
+    },
+
     getPreviewBlockTarget(node: EventTarget | null) {
       if (!node || typeof (node as Element).closest !== "function") {
         return null;
@@ -948,54 +951,15 @@ export default {
         return;
       }
 
-      if (!previewDocument.getElementById("lia-preview-block-outline-style")) {
-        const style = previewDocument.createElement("style");
-        style.id = "lia-preview-block-outline-style";
-        style.textContent = [
-          "main > .lia-preview-block {",
-          "  position: relative;",
-          "  border: 2px dashed rgba(56, 204, 204, 0.7);",
-          "  border-radius: 0.9rem;",
-          "  padding: 1rem 1.1rem;",
-          "  margin-block: 1rem;",
-          "  cursor: grab;",
-          "  transition: border-color 120ms ease, box-shadow 120ms ease, opacity 120ms ease;",
-          "}",
-          "main > .lia-preview-block[data-lia-block-dragging='true'] {",
-          "  cursor: grabbing;",
-          "  opacity: 0.72;",
-          "}",
-          "main > .lia-preview-block[data-lia-block-drop='before']::before,",
-          "main > .lia-preview-block[data-lia-block-drop='after']::after {",
-          "  content: '';",
-          "  position: absolute;",
-          "  left: -0.15rem;",
-          "  right: -0.15rem;",
-          "  height: 0.3rem;",
-          "  border-radius: 999px;",
-          "  background: #38CCCC;",
-          "  box-shadow: 0 0 0.55rem rgba(56, 204, 204, 0.95), 0 0 1.1rem rgba(56, 204, 204, 0.55);",
-          "  pointer-events: none;",
-          "}",
-          "main > .lia-preview-block[data-lia-block-drop='before']::before {",
-          "  top: -0.75rem;",
-          "}",
-          "main > .lia-preview-block[data-lia-block-drop='after']::after {",
-          "  bottom: -0.75rem;",
-          "}",
-          "main > .lia-preview-block:first-child {",
-          "  margin-top: 0.35rem;",
-          "}",
-          "main > .lia-preview-block > :first-child {",
-          "  margin-top: 0;",
-          "}",
-          "main > .lia-preview-block > :last-child {",
-          "  margin-bottom: 0;",
-          "}",
-        ].join("\n");
+      let outlineStyle = previewDocument.getElementById("lia-preview-block-outline-style");
 
-        previewDocument.head.appendChild(style);
+      if (!outlineStyle) {
+        outlineStyle = previewDocument.createElement("style");
+        outlineStyle.id = "lia-preview-block-outline-style";
+        previewDocument.head.appendChild(outlineStyle);
       }
+
+      outlineStyle.textContent = this.getPreviewBlockOutlineCss();
 
       Array.from(main.children).forEach((node) => {
         if (!(node instanceof iframe.contentWindow!.HTMLElement)) {
@@ -1097,7 +1061,7 @@ export default {
           iframe.contentWindow?.postMessage({ cmd, param }, "*");
         };
 
-        this.sendToLia("eval", INIT_CODE);
+        this.sendToLia("eval", this.getPreviewInitCode());
       }
 
       if (this.sendToLia) {
@@ -1133,6 +1097,16 @@ export default {
       // @ts-ignore
       iframe.contentWindow["LIA"].onReady = this.onReady;
     }
+  },
+  
+  watch: {
+    lights() {
+      if (this.sendToLia) {
+        this.sendToLia("eval", this.getPreviewInitCode());
+      }
+
+      this.decoratePreviewBlocks();
+    },
   },
 };
 </script>

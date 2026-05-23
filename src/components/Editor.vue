@@ -2316,8 +2316,8 @@ I (study) ~[[ am going to study ]]~ harder this term.
   padding-top: 0.6rem !important;
   padding-bottom: 0.72rem !important;
   background-color: rgba(255, 255, 255, 0.02);
-  color: #38cccc;
-  box-shadow: inset 0 0 0 1px rgba(56, 204, 204, 0.12);
+  color: var(--liveeditor-accent-color, #147375);
+  box-shadow: inset 0 0 0 1px rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.12);
   line-height: 1.05;
 }
 
@@ -2331,20 +2331,20 @@ I (study) ~[[ am going to study ]]~ harder this term.
 
 .editor-category-group .btn.btn-outline-secondary {
   opacity: 0.92;
-  border-color: rgba(56, 204, 204, 0.9);
+  border-color: rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.9);
 }
 
 .editor-category-group .btn.btn-outline-secondary:hover {
   opacity: 1;
   transform: translateY(-1px);
-  background-color: rgba(56, 204, 204, 0.1);
+  background-color: rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.1);
 }
 
 .editor-category-group .btn.btn-primary {
-  background-color: #38cccc;
+  background-color: var(--liveeditor-accent-color, #147375);
   color: #0f2c2c;
-  border-color: #38cccc;
-  box-shadow: 0 -0.15rem 0.4rem rgba(56, 204, 204, 0.18);
+  border-color: var(--liveeditor-accent-color, #147375);
+  box-shadow: 0 -0.15rem 0.4rem rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.18);
   top: var(--editor-tab-active-offset);
   margin-bottom: calc(-1 * var(--editor-tab-active-offset));
   border-bottom-left-radius: 0;
@@ -2366,10 +2366,10 @@ I (study) ~[[ am going to study ]]~ harder this term.
 }
 
 .editor-toolbar.navbar-dark .editor-category-group .btn.btn-primary {
-  background-color: #38cccc;
+  background-color: var(--liveeditor-accent-color, #38cccc);
   color: #0f2c2c;
-  border-color: #38cccc;
-  box-shadow: 0 -0.18rem 0.62rem rgba(56, 204, 204, 0.34);
+  border-color: var(--liveeditor-accent-color, #38cccc);
+  box-shadow: 0 -0.18rem 0.62rem rgba(var(--liveeditor-accent-rgb, 56, 204, 204), 0.34);
 }
 
 .editor-toolbar.navbar-dark .editor-category-group .btn.btn-primary::before,
@@ -2382,15 +2382,15 @@ I (study) ~[[ am going to study ]]~ harder this term.
   z-index: 2;
   margin-top: -4px;
   padding: 0.42rem 0.5rem 0.22rem 0.5rem;
-  border: 2px solid #38cccc;
+  border: 2px solid var(--liveeditor-accent-color, #147375);
   border-radius: 1rem 1rem 0 0;
   background-color: var(--editor-toolbar-bg);
-  box-shadow: 0 0.2rem 0.75rem rgba(56, 204, 204, 0.1);
+  box-shadow: 0 0.2rem 0.75rem rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.1);
 }
 
 .editor-toolbar.navbar-dark .editor-main-toolbar {
   background-color: #323232;
-  border-color: #38cccc;
+  border-color: var(--liveeditor-accent-color, #38cccc);
 }
 
 .editor-zoom-toolbar {

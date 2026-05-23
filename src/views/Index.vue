@@ -703,7 +703,7 @@ export default {
 }
 
 .overview-divider {
-  border-top: 2px solid #38cccc;
+  border-top: 2px solid var(--liveeditor-accent-color, #147375);
   opacity: 1;
 }
 
@@ -719,7 +719,7 @@ export default {
   min-width: 15rem;
   max-height: 20rem;
   overflow: auto;
-  border-color: #38cccc !important;
+  border-color: var(--liveeditor-accent-color, #147375) !important;
 }
 
 .overview-translation-item {
@@ -732,13 +732,13 @@ export default {
 .overview-translation-item.active,
 .overview-translation-item:active,
 .overview-translation-item:hover {
-  background-color: rgba(56, 204, 204, 0.14);
+  background-color: rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.14);
   color: inherit;
 }
 
 .overview-translation-code {
   min-width: 2rem;
   font-weight: 700;
-  color: #38cccc;
+  color: var(--liveeditor-accent-color, #147375);
 }
 </style>

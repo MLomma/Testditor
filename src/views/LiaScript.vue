@@ -122,6 +122,7 @@ export default {
   },
 
   mounted() {
+    this.ensureSplitterStyle();
     this.syncTheme();
 
     this.$nextTick(() => {
@@ -135,6 +136,120 @@ export default {
   },
 
   methods: {
+    ensureSplitterStyle() {
+      if (document.getElementById("lia-custom-splitter-style")) {
+        return;
+      }
+
+      const style = document.createElement("style");
+      style.id = "lia-custom-splitter-style";
+      style.textContent = `
+        .splitpanes__splitter {
+          position: relative !important;
+          background: var(--bs-body-bg, #ffffff) !important;
+          border-left: 0 !important;
+          border-right: 0 !important;
+          border-top: 0 !important;
+          border-bottom: 0 !important;
+          box-shadow: none !important;
+          overflow: visible !important;
+          transition: filter 0.18s ease, opacity 0.18s ease !important;
+        }
+
+        .splitpanes--vertical > .splitpanes__splitter {
+          box-sizing: border-box !important;
+          min-width: 11px !important;
+          width: 11px !important;
+          padding: 0 1px !important;
+          background-image: linear-gradient(to right, var(--bs-body-bg, #ffffff) 0 3px, var(--liveeditor-accent-color, #147375) 3px 6px, var(--bs-body-bg, #ffffff) 6px 100%) !important;
+          background-origin: content-box !important;
+          background-clip: content-box !important;
+          cursor: col-resize !important;
+        }
+
+        .splitpanes--horizontal > .splitpanes__splitter {
+          min-height: 2px !important;
+          height: 2px !important;
+          cursor: row-resize !important;
+        }
+
+        .splitpanes--vertical > .splitpanes__splitter::before,
+        .splitpanes--vertical > .splitpanes__splitter::after,
+        .splitpanes--horizontal > .splitpanes__splitter::before,
+        .splitpanes--horizontal > .splitpanes__splitter::after {
+          content: "" !important;
+          position: absolute !important;
+          pointer-events: none !important;
+        }
+
+        .splitpanes--vertical > .splitpanes__splitter::before {
+          content: none !important;
+          inset: auto !important;
+          background: transparent !important;
+          box-shadow: none !important;
+          filter: none !important;
+          opacity: 0 !important;
+          z-index: 0 !important;
+        }
+
+        .splitpanes--vertical > .splitpanes__splitter::after {
+          top: calc(50% - 11.5px) !important;
+          left: calc(50% - 12.5px) !important;
+          width: 23px !important;
+          height: 23px !important;
+          border-radius: 50% !important;
+          transform: none !important;
+          background:
+            linear-gradient(135deg, transparent 34%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 1) 34%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 1) 70%, transparent 70%) 3px 4px / 5px 5px no-repeat,
+            linear-gradient(225deg, transparent 34%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 1) 34%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 1) 70%, transparent 70%) 3px 9px / 5px 5px no-repeat,
+            linear-gradient(45deg, transparent 34%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 1) 34%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 1) 70%, transparent 70%) 11px 4px / 5px 5px no-repeat,
+            linear-gradient(-45deg, transparent 34%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 1) 34%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 1) 70%, transparent 70%) 11px 9px / 5px 5px no-repeat,
+            radial-gradient(circle at center, rgba(18, 76, 76, 0.96) 0, rgba(18, 76, 76, 0.96) 100%) !important;
+          border: 2px solid rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.92) !important;
+          box-shadow: 0 0 0 1px rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.18), 0 0 12px rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.42), inset 0 0 10px rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.14) !important;
+          opacity: 1 !important;
+          z-index: 2 !important;
+        }
+
+        .splitpanes--horizontal > .splitpanes__splitter::before {
+          left: 0 !important;
+          right: 0 !important;
+          top: 50% !important;
+          height: 16px !important;
+          transform: translateY(-50%) !important;
+          background:
+            linear-gradient(to bottom, transparent 0, transparent 4px, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.98) 4px, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.98) 5px, transparent 5px, transparent 11px, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.98) 11px, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.98) 12px, transparent 12px, transparent 100%),
+            linear-gradient(45deg, transparent 32%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.96) 45%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.96) 55%, transparent 68%) left center / 18px 8px repeat-x,
+            linear-gradient(-45deg, transparent 32%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.96) 45%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.96) 55%, transparent 68%) left center / 18px 8px repeat-x !important;
+          filter: drop-shadow(0 0 5px rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.42)) !important;
+          opacity: 1 !important;
+        }
+
+        .splitpanes--horizontal > .splitpanes__splitter::after {
+          left: 0 !important;
+          right: 0 !important;
+          top: 50% !important;
+          height: 6px !important;
+          transform: translateY(-50%) !important;
+          background: linear-gradient(to right, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.12), rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.42), rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.12)) center / 100% 2px no-repeat !important;
+          filter: drop-shadow(0 0 8px rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.42)) !important;
+          opacity: 0.95 !important;
+        }
+
+        .splitpanes__splitter:hover {
+          filter: drop-shadow(0 0 8px rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.38)) !important;
+        }
+
+        .splitpanes__splitter:hover::before,
+        .splitpanes__splitter:hover::after {
+          opacity: 1 !important;
+          filter: drop-shadow(0 0 6px rgba(56, 204, 204, 0.45)) !important;
+        }
+      `;
+
+      document.head.appendChild(style);
+    },
+
     syncTheme() {
       const theme = this.lights ? "light" : "dark";
       const backgroundColor = this.lights ? "" : "#323232";
@@ -973,7 +1088,6 @@ export default {
       >
       <pane
         :hidden="viewMode > 0"
-        style="border-right: solid lightgray 2px"
         :class="{
           fullHeight: viewMode < 0 && horizontal,
           fullWidth: viewMode < 0 && !horizontal,
@@ -1035,6 +1149,7 @@ export default {
             @goto="gotoEditor"
             @reorder="reorderPreviewMedia"
             :fetchError="fetchError"
+            :lights="lights"
             :class="{ invisible: previewNotReady }"
           />
         </div>
@@ -1184,18 +1299,106 @@ button.btn.btn-outline-secondary.me-2.px-3 {
 }
 
 .splitpanes__splitter {
-  background-color: #f8f9fa !important;
-}
-
-.editor-page--dark .splitpanes__splitter {
-  background-color: #323232 !important;
+  position: relative;
+  background: var(--bs-body-bg, #ffffff) !important;
+  border-left: 0 !important;
+  border-right: 0 !important;
+  border-top: 0 !important;
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+  overflow: visible;
+  transition:
+    filter 0.18s ease,
+    opacity 0.18s ease;
 }
 
 .splitpanes--vertical > .splitpanes__splitter {
-  min-width: 10px;
+  box-sizing: border-box;
+  min-width: 11px;
+  width: 11px;
+  padding: 0 1px;
+  background-image: linear-gradient(to right, var(--bs-body-bg, #ffffff) 0 3px, var(--liveeditor-accent-color, #147375) 3px 6px, var(--bs-body-bg, #ffffff) 6px 100%) !important;
+  background-origin: content-box;
+  background-clip: content-box;
+  cursor: col-resize;
 }
 
 .splitpanes--horizontal > .splitpanes__splitter {
-  min-height: 10px;
+  min-height: 2px;
+  height: 2px;
+  cursor: row-resize;
+}
+
+.splitpanes--vertical > .splitpanes__splitter::before,
+.splitpanes--vertical > .splitpanes__splitter::after,
+.splitpanes--horizontal > .splitpanes__splitter::before,
+.splitpanes--horizontal > .splitpanes__splitter::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.splitpanes--vertical > .splitpanes__splitter::before {
+  content: none;
+  inset: auto;
+  background: transparent;
+  box-shadow: none;
+  filter: none;
+  opacity: 0;
+  z-index: 0;
+}
+
+.splitpanes--vertical > .splitpanes__splitter::after {
+  top: calc(50% - 11.5px);
+  left: calc(50% - 12.5px);
+  width: 23px;
+  height: 23px;
+  border-radius: 50%;
+  transform: none;
+  background:
+    linear-gradient(135deg, transparent 34%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 1) 34%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 1) 70%, transparent 70%) 3px 4px / 5px 5px no-repeat,
+    linear-gradient(225deg, transparent 34%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 1) 34%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 1) 70%, transparent 70%) 3px 9px / 5px 5px no-repeat,
+    linear-gradient(45deg, transparent 34%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 1) 34%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 1) 70%, transparent 70%) 11px 4px / 5px 5px no-repeat,
+    linear-gradient(-45deg, transparent 34%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 1) 34%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 1) 70%, transparent 70%) 11px 9px / 5px 5px no-repeat,
+    radial-gradient(circle at center, rgba(18, 76, 76, 0.96) 0, rgba(18, 76, 76, 0.96) 100%);
+  border: 2px solid rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.92);
+  box-shadow: 0 0 0 1px rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.18), 0 0 12px rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.42), inset 0 0 10px rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.14);
+  opacity: 1;
+  z-index: 2;
+}
+
+.splitpanes--horizontal > .splitpanes__splitter::before {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 16px;
+  transform: translateY(-50%);
+  background:
+    linear-gradient(to bottom, transparent 0, transparent 4px, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.98) 4px, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.98) 5px, transparent 5px, transparent 11px, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.98) 11px, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.98) 12px, transparent 12px, transparent 100%),
+    linear-gradient(45deg, transparent 32%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.96) 45%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.96) 55%, transparent 68%) left center / 18px 8px repeat-x,
+    linear-gradient(-45deg, transparent 32%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.96) 45%, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.96) 55%, transparent 68%) left center / 18px 8px repeat-x;
+  filter: drop-shadow(0 0 5px rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.42));
+  opacity: 1;
+}
+
+.splitpanes--horizontal > .splitpanes__splitter::after {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 6px;
+  transform: translateY(-50%);
+  background: linear-gradient(to right, rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.12), rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.42), rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.12)) center / 100% 2px no-repeat;
+  filter: drop-shadow(0 0 8px rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.42));
+  opacity: 0.95;
+}
+
+.splitpanes__splitter:hover {
+  filter: drop-shadow(0 0 8px rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.38));
+}
+
+.splitpanes__splitter:hover::before,
+.splitpanes__splitter:hover::after {
+  opacity: 1;
+  filter: drop-shadow(0 0 6px rgba(56, 204, 204, 0.45));
 }
 </style>

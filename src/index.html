@@ -193,10 +193,17 @@
 
     <style>
       :root {
-        --bs-primary: #38cccc;
-        --bs-primary-rgb: 56, 204, 204;
-        --bs-link-color: #38cccc;
-        --bs-link-hover-color: #38cccc;
+        --liveeditor-accent-color: #147375;
+        --liveeditor-accent-rgb: 20, 115, 117;
+        --bs-primary: var(--liveeditor-accent-color);
+        --bs-primary-rgb: var(--liveeditor-accent-rgb);
+        --bs-link-color: var(--liveeditor-accent-color);
+        --bs-link-hover-color: var(--liveeditor-accent-color);
+      }
+
+      [data-bs-theme='dark'] {
+        --liveeditor-accent-color: #38cccc;
+        --liveeditor-accent-rgb: 56, 204, 204;
       }
 
       body {
@@ -232,14 +239,14 @@
 
       .btn-primary {
         --bs-btn-padding-y: 0.375rem;
-        --bs-btn-bg: #38cccc;
-        --bs-btn-border-color: #38cccc;
-        --bs-btn-hover-bg: #38cccc;
-        --bs-btn-hover-border-color: #38cccc;
-        --bs-btn-active-bg: #38cccc;
-        --bs-btn-active-border-color: #38cccc;
-        --bs-btn-disabled-bg: #38cccc;
-        --bs-btn-disabled-border-color: #38cccc;
+        --bs-btn-bg: var(--liveeditor-accent-color);
+        --bs-btn-border-color: var(--liveeditor-accent-color);
+        --bs-btn-hover-bg: var(--liveeditor-accent-color);
+        --bs-btn-hover-border-color: var(--liveeditor-accent-color);
+        --bs-btn-active-bg: var(--liveeditor-accent-color);
+        --bs-btn-active-border-color: var(--liveeditor-accent-color);
+        --bs-btn-disabled-bg: var(--liveeditor-accent-color);
+        --bs-btn-disabled-border-color: var(--liveeditor-accent-color);
       }
 
       .btn.btn-primary {
@@ -262,18 +269,18 @@
       }
 
       .btn-outline-secondary {
-        --bs-btn-color: #38cccc;
-        --bs-btn-border-color: #38cccc;
-        --bs-btn-hover-bg: #38cccc;
-        --bs-btn-hover-border-color: #38cccc;
+        --bs-btn-color: var(--liveeditor-accent-color);
+        --bs-btn-border-color: var(--liveeditor-accent-color);
+        --bs-btn-hover-bg: var(--liveeditor-accent-color);
+        --bs-btn-hover-border-color: var(--liveeditor-accent-color);
         --bs-btn-hover-color: #fff;
-        --bs-btn-active-bg: #38cccc;
-        --bs-btn-active-border-color: #38cccc;
+        --bs-btn-active-bg: var(--liveeditor-accent-color);
+        --bs-btn-active-border-color: var(--liveeditor-accent-color);
         --bs-btn-active-color: #fff;
       }
 
       .card {
-        border: 2px solid #38cccc !important;
+        border: 2px solid var(--liveeditor-accent-color) !important;
       }
 
       .goog-te-banner-frame.skiptranslate,
