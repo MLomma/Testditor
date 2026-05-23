@@ -5,7 +5,8 @@
   "scripts": {
     "clean": "rimraf dist",
     "sw": "npx workbox injectManifest workbox-config.js",
-    "build": "npm run clean && npm run build:index && npm run purge && npm run sw && npm run build:examples && npm run minify:js",
+    "build": "npm run clean && npm run build:pages && npm run purge && npm run sw && npm run minify:js",
+    "build:pages": "npx parcel build src/index.html src/examples.html --no-source-maps --public-url ./",
     "build:index": "npx parcel build src/index.html --no-source-maps --public-url ./",
     "build:examples": "npx parcel build src/examples.html --no-source-maps --public-url ./",
     "watch": "npm run clean && npx parcel serve src/*.html --no-cache --no-source-maps --open --port 4321",

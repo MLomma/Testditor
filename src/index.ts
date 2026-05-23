@@ -1,3 +1,5 @@
+import 'bootstrap/dist/css/bootstrap.min.css'
+import 'bootstrap-icons/font/bootstrap-icons.css'
 import { createApp } from 'vue'
 import Index from './views/Index.vue'
 import Edit from './views/Edit.vue'

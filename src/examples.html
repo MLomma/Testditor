@@ -6,15 +6,6 @@
 
     <title>LiaScript LiveEditor</title>
 
-    <link
-      href="../node_modules/bootstrap-icons/font/bootstrap-icons.css"
-      rel="stylesheet"
-    />
-    <link
-      href="../node_modules/bootstrap/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-    />
-
     <!-- Favicons -->
     <link rel="apple-touch-icon" href="../assets/logo.png" />
     <link rel="icon" href="../assets/logo.png" type="image/png" />
@@ -34,6 +25,8 @@
 
   <body>
     <script type="module">
+      import 'bootstrap/dist/css/bootstrap.min.css'
+      import 'bootstrap-icons/font/bootstrap-icons.css'
       import { createApp } from 'vue'
       import App from './views/Examples.vue'
 

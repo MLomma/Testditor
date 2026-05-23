@@ -6,14 +6,182 @@
 
     <title>LiaScript LiveEditor</title>
 
-    <link
-      href="../node_modules/bootstrap-icons/font/bootstrap-icons.css"
-      rel="stylesheet"
-    />
-    <link
-      href="../node_modules/bootstrap/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-    />
+    <script>
+      (function () {
+        var hostname = window.location.hostname;
+        var isLocalhost =
+          hostname === "localhost" ||
+          hostname === "127.0.0.1" ||
+          hostname === "::1";
+
+        if (!isLocalhost || !("serviceWorker" in navigator) || !("caches" in window)) {
+          return;
+        }
+
+        var resetKey = "liveeditor-dev-cache-reset";
+
+        navigator.serviceWorker.getRegistrations().then(function (registrations) {
+          return Promise.all(
+            registrations.map(function (registration) {
+              return registration.unregister();
+            })
+          ).then(function () {
+            return caches.keys().then(function (cacheNames) {
+              return Promise.all(
+                cacheNames.map(function (cacheName) {
+                  return caches.delete(cacheName);
+                })
+              );
+            });
+          }).then(function () {
+            if (!sessionStorage.getItem(resetKey) && registrations.length > 0) {
+              sessionStorage.setItem(resetKey, "1");
+              window.location.reload();
+              return;
+            }
+
+            sessionStorage.removeItem(resetKey);
+          });
+        });
+      })();
+    </script>
+
+    <script>
+      (function () {
+        var selectors = [
+          '#goog-gt-tt',
+          '#goog-gt-vt',
+          '#goog-gt-original-text',
+          '.goog-te-balloon-frame',
+          'iframe.goog-te-balloon-frame',
+          '.goog-tooltip',
+          '.VIpgJd-yAWNEb-L7lbkb',
+          '.VIpgJd-yAWNEb-hvhgNd',
+          '.VIpgJd-yAWNEb-nVMfcd-fmcmS',
+          '.VIpgJd-yAWNEb-hvhgNd-axAV1'
+        ];
+        var sanitizeScheduled = false;
+        var isUnwrappingFonts = false;
+
+        function hideGoogleTranslateChrome() {
+          selectors.forEach(function (selector) {
+            document.querySelectorAll(selector).forEach(function (element) {
+              if (
+                element.id === 'goog-gt-vt' ||
+                element.id === 'goog-gt-original-text' ||
+                element.id === 'goog-gt-tt' ||
+                element.classList.contains('VIpgJd-yAWNEb-hvhgNd') ||
+                element.classList.contains('VIpgJd-yAWNEb-L7lbkb')
+              ) {
+                element.remove();
+                return;
+              }
+
+              element.style.setProperty('display', 'none', 'important');
+              element.style.setProperty('visibility', 'hidden', 'important');
+              element.style.setProperty('opacity', '0', 'important');
+              element.style.setProperty('pointer-events', 'none', 'important');
+            });
+          });
+
+          document.querySelectorAll('.goog-text-highlight').forEach(function (element) {
+            element.style.setProperty('background-color', 'transparent', 'important');
+            element.style.setProperty('box-shadow', 'none', 'important');
+          });
+        }
+
+        function unwrapTranslatedFonts() {
+          if (isUnwrappingFonts) {
+            return;
+          }
+
+          isUnwrappingFonts = true;
+
+          try {
+            document.querySelectorAll('body font').forEach(function (element) {
+              if (
+                element.closest(
+                  '#google_translate_element, #goog-gt-tt, #goog-gt-vt, #goog-gt-original-text, .goog-te-gadget'
+                )
+              ) {
+                return;
+              }
+
+              element.style.setProperty('pointer-events', 'none', 'important');
+              element.style.setProperty('cursor', 'inherit', 'important');
+              element.removeAttribute('title');
+
+              var parent = element.parentNode;
+
+              if (!parent) {
+                return;
+              }
+
+              while (element.firstChild) {
+                parent.insertBefore(element.firstChild, element);
+              }
+
+              parent.removeChild(element);
+            });
+          } finally {
+            isUnwrappingFonts = false;
+          }
+        }
+
+        function sanitizeGoogleTranslate() {
+          hideGoogleTranslateChrome();
+          unwrapTranslatedFonts();
+        }
+
+        function scheduleSanitizeGoogleTranslate() {
+          if (sanitizeScheduled) {
+            return;
+          }
+
+          sanitizeScheduled = true;
+
+          window.requestAnimationFrame(function () {
+            sanitizeScheduled = false;
+            sanitizeGoogleTranslate();
+          });
+        }
+
+        sanitizeGoogleTranslate();
+
+        var observer = new MutationObserver(function () {
+          scheduleSanitizeGoogleTranslate();
+        });
+
+        observer.observe(document.documentElement, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: ['class', 'style']
+        });
+
+        ['mouseover', 'mouseenter', 'mousemove'].forEach(function (eventName) {
+          document.addEventListener(
+            eventName,
+            function (event) {
+              var target = event.target;
+
+              if (!(target instanceof Element)) {
+                return;
+              }
+
+              if (target.closest('font')) {
+                event.stopImmediatePropagation();
+                scheduleSanitizeGoogleTranslate();
+              }
+            },
+            true
+          );
+        });
+
+        document.addEventListener('DOMContentLoaded', sanitizeGoogleTranslate);
+        window.addEventListener('load', sanitizeGoogleTranslate);
+      })();
+    </script>
 
     <script type="module" src="index.ts"></script>
 
@@ -24,12 +192,106 @@
     <link rel="icon" href="../assets/logo.png" type="image/png" />
 
     <style>
+      :root {
+        --bs-primary: #147375;
+        --bs-primary-rgb: 20, 115, 117;
+        --bs-link-color: #147375;
+        --bs-link-hover-color: #0f5a5c;
+      }
+
       body {
         width: 100%;
         height: 100vh;
         overflow-y: hidden;
         position: fixed;
         margin-top: 0px;
+        top: 0 !important;
+      }
+
+      html {
+        margin-top: 0 !important;
+      }
+
+      .btn-primary {
+        --bs-btn-padding-y: 0.375rem;
+        --bs-btn-bg: #147375;
+        --bs-btn-border-color: #147375;
+        --bs-btn-hover-bg: #0f5a5c;
+        --bs-btn-hover-border-color: #0f5a5c;
+        --bs-btn-active-bg: #0d4d4f;
+        --bs-btn-active-border-color: #0d4d4f;
+        --bs-btn-disabled-bg: #147375;
+        --bs-btn-disabled-border-color: #147375;
+      }
+
+      .btn.btn-primary {
+        height: 40px !important;
+        min-height: 40px;
+      }
+
+      .btn.btn-primary,
+      .btn.btn-outline-secondary {
+        height: 40px !important;
+        min-height: 40px;
+        padding-top: 6px !important;
+        padding-bottom: 6px !important;
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        line-height: 1.2;
+        text-align: center;
+        box-sizing: border-box;
+      }
+
+      .btn-outline-secondary {
+        --bs-btn-color: #147375;
+        --bs-btn-border-color: #147375;
+        --bs-btn-hover-bg: #147375;
+        --bs-btn-hover-border-color: #147375;
+        --bs-btn-hover-color: #fff;
+        --bs-btn-active-bg: #147375;
+        --bs-btn-active-border-color: #147375;
+        --bs-btn-active-color: #fff;
+      }
+
+      .card {
+        border: 2px solid #147375 !important;
+      }
+
+      .goog-te-banner-frame.skiptranslate,
+      iframe.goog-te-banner-frame,
+      .goog-te-balloon-frame,
+      iframe.goog-te-balloon-frame,
+      .skiptranslate > iframe,
+      .goog-tooltip,
+      .goog-tooltip:hover,
+      .goog-logo-link,
+      .goog-te-gadget > span,
+      #goog-gt-tt,
+      #goog-gt-vt,
+      #goog-gt-original-text,
+      .VIpgJd-yAWNEb-L7lbkb,
+      .VIpgJd-yAWNEb-hvhgNd,
+      .VIpgJd-yAWNEb-nVMfcd-fmcmS,
+      .VIpgJd-yAWNEb-hvhgNd-axAV1 {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+      }
+
+      .goog-text-highlight {
+        background-color: transparent !important;
+        box-shadow: none !important;
+      }
+
+      body font {
+        pointer-events: none !important;
+        cursor: inherit !important;
+      }
+
+      body.skiptranslate {
+        top: 0 !important;
       }
     </style>
 

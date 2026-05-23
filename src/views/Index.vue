@@ -3,6 +3,7 @@ import Dexie from "../ts/indexDB";
 import Card from "../components/Card.vue";
 import Footer from "../components/Footer.vue";
 import Modal from "../components/Modal.vue";
+import NewCourseCard from "../components/NewCourseCard.vue";
 import NewCourseModal from "../components/NewCourseModal.vue";
 import * as Y from "yjs";
 import { IndexeddbPersistence } from "y-indexeddb";
@@ -11,6 +12,99 @@ import MiniSearch from "minisearch";
 import * as Utils from "../ts/utils";
 
 import logoImg from "url:../../assets/logo.png";
+
+const OVERVIEW_TRANSLATION_LANGUAGES = [
+  { code: "en", label: "English" },
+  { code: "de", label: "Deutsch" },
+  { code: "es", label: "Spanish" },
+  { code: "fr", label: "French" },
+  { code: "it", label: "Italian" },
+  { code: "nl", label: "Dutch" },
+  { code: "pt", label: "Portuguese" },
+  { code: "ru", label: "Russian" },
+  { code: "uk", label: "Ukrainian" },
+  { code: "ar", label: "Arabic" },
+  { code: "bg", label: "Bulgarian" },
+  { code: "fa", label: "Persian" },
+  { code: "hi", label: "Hindi" },
+  { code: "ja", label: "Japanese" },
+  { code: "ko", label: "Korean" },
+  { code: "sw", label: "Swahili" },
+  { code: "zh-CN", label: "Chinese (Simplified)" },
+  { code: "zh-TW", label: "Chinese (Traditional)" },
+].sort((left, right) =>
+  left.label.localeCompare(right.label, undefined, { sensitivity: "base" })
+);
+
+const OVERVIEW_TRANSLATION_COOKIE = "googtrans";
+const OVERVIEW_TRANSLATION_RELOAD_KEY = "overview-translation-reload";
+
+function normalizeOverviewLanguage(language?: string) {
+  if (!language) {
+    return "en";
+  }
+
+  const normalized = language.toLowerCase();
+  const aliases: Record<string, string> = {
+    de: "de",
+    en: "en",
+    es: "es",
+    fr: "fr",
+    it: "it",
+    nl: "nl",
+    pt: "pt",
+    ru: "ru",
+    ua: "uk",
+    uk: "uk",
+    ar: "ar",
+    bg: "bg",
+    fa: "fa",
+    hi: "hi",
+    ja: "ja",
+    ko: "ko",
+    sw: "sw",
+    zh: "zh-CN",
+    "zh-cn": "zh-CN",
+    "zh-tw": "zh-TW",
+    tw: "zh-TW",
+  };
+
+  const direct = aliases[normalized];
+  if (direct) {
+    return direct;
+  }
+
+  const short = normalized.split("-")[0];
+  return aliases[short] || "en";
+}
+
+function readOverviewTranslationCookie() {
+  const cookie = document.cookie
+    .split(";")
+    .map((entry) => entry.trim())
+    .find((entry) => entry.startsWith(`${OVERVIEW_TRANSLATION_COOKIE}=`));
+
+  if (!cookie) {
+    return null;
+  }
+
+  const value = decodeURIComponent(cookie.split("=")[1] || "");
+  const targetLanguage = value.split("/").filter(Boolean)[1];
+
+  return targetLanguage || null;
+}
+
+function writeOverviewTranslationCookie(language: string) {
+  const value = `/en/${language}`;
+  const encoded = encodeURIComponent(value);
+
+  document.cookie = `${OVERVIEW_TRANSLATION_COOKIE}=${encoded}; path=/; SameSite=Lax`;
+
+  const hostname = window.location.hostname;
+  if (hostname && hostname !== "localhost" && !/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+    document.cookie = `${OVERVIEW_TRANSLATION_COOKIE}=${encoded}; path=/; domain=.${hostname}; SameSite=Lax`;
+  }
+}
 
 function waitForSync(provider) {
   return new Promise<void>((resolve) => {
@@ -85,6 +179,10 @@ export default {
       tags: [] as Array<{ name: string; active: boolean }>,
       lights: config.lights,
       showNewCourseModal: false,
+      translationLanguages: OVERVIEW_TRANSLATION_LANGUAGES,
+      translationLanguage: "en",
+      translationDropdownOpen: false,
+      translationReady: false,
     };
   },
 
@@ -92,11 +190,21 @@ export default {
     lightMode() {
       return this.lights ? "bi bi-sun" : "bi bi-moon";
     },
+
+    currentTranslationLabel() {
+      return this.translationLanguage.split("-")[0].toUpperCase();
+    },
   },
 
   mounted() {
     this.initSearch();
     this.syncTheme();
+    this.initOverviewTranslation();
+    document.addEventListener("click", this.handleDocumentClick);
+  },
+
+  beforeUnmount() {
+    document.removeEventListener("click", this.handleDocumentClick);
   },
 
   watch: {
@@ -191,6 +299,122 @@ export default {
       Utils.storeConfig(config);
     },
 
+    handleDocumentClick(event: MouseEvent) {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest(".overview-translation")) {
+        this.translationDropdownOpen = false;
+      }
+    },
+
+    toggleTranslationDropdown() {
+      this.translationDropdownOpen = !this.translationDropdownOpen;
+    },
+
+    initOverviewTranslation() {
+      const cookieLanguage = readOverviewTranslationCookie();
+      const suggestedLanguage = normalizeOverviewLanguage(
+        cookieLanguage ||
+          (Array.isArray(navigator.languages) ? navigator.languages[0] : "") ||
+          navigator.language ||
+          document.documentElement.lang
+      );
+
+      this.translationLanguage = suggestedLanguage;
+
+      if (cookieLanguage !== suggestedLanguage) {
+        writeOverviewTranslationCookie(suggestedLanguage);
+      }
+
+      const reloadMarker = sessionStorage.getItem(OVERVIEW_TRANSLATION_RELOAD_KEY);
+      if (!cookieLanguage && suggestedLanguage !== "en" && reloadMarker !== suggestedLanguage) {
+        sessionStorage.setItem(OVERVIEW_TRANSLATION_RELOAD_KEY, suggestedLanguage);
+        window.location.reload();
+        return;
+      }
+
+      if (reloadMarker === suggestedLanguage || suggestedLanguage === "en") {
+        sessionStorage.removeItem(OVERVIEW_TRANSLATION_RELOAD_KEY);
+      }
+
+      const windowWithTranslate = window as Window & {
+        google?: any;
+        googleTranslateElementInit?: () => void;
+      };
+
+      const initializeWidget = () => {
+        if (!windowWithTranslate.google?.translate?.TranslateElement) {
+          return;
+        }
+
+        if (!document.getElementById("google_translate_element")?.childElementCount) {
+          new windowWithTranslate.google.translate.TranslateElement(
+            {
+              pageLanguage: "en",
+              autoDisplay: false,
+              includedLanguages: this.translationLanguages
+                .map((language) => language.code)
+                .join(","),
+            },
+            "google_translate_element"
+          );
+        }
+
+        this.translationReady = true;
+
+        if (this.translationLanguage !== "en") {
+          window.setTimeout(() => {
+            this.applyOverviewTranslation(this.translationLanguage);
+          }, 300);
+        }
+      };
+
+      windowWithTranslate.googleTranslateElementInit = initializeWidget;
+
+      if (windowWithTranslate.google?.translate?.TranslateElement) {
+        initializeWidget();
+        return;
+      }
+
+      if (!document.getElementById("google-translate-script")) {
+        const script = document.createElement("script");
+        script.id = "google-translate-script";
+        script.src =
+          "https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
+        script.async = true;
+        document.head.appendChild(script);
+      }
+    },
+
+    changeOverviewLanguage(language: string) {
+      if (language === this.translationLanguage) {
+        this.translationDropdownOpen = false;
+        return;
+      }
+
+      this.translationLanguage = language;
+      this.translationDropdownOpen = false;
+      writeOverviewTranslationCookie(language);
+      sessionStorage.setItem(OVERVIEW_TRANSLATION_RELOAD_KEY, language);
+      window.location.reload();
+    },
+
+    applyOverviewTranslation(language: string) {
+      if (!this.translationReady) {
+        return;
+      }
+
+      const combo = document.querySelector(".goog-te-combo") as HTMLSelectElement | null;
+      if (!combo) {
+        window.setTimeout(() => {
+          this.applyOverviewTranslation(language);
+        }, 250);
+        return;
+      }
+
+      combo.value = language;
+      combo.dispatchEvent(new Event("change", { bubbles: true }));
+    },
+
     async createNewCourse(params: {
       author: string;
       language: string;
@@ -259,7 +483,7 @@ export default {
     await this.init();
   },
 
-  components: { Card, Footer, Modal, NewCourseModal },
+  components: { Card, Footer, Modal, NewCourseCard, NewCourseModal },
 };
 </script>
 
@@ -275,33 +499,80 @@ export default {
 
           <button
             type="button"
-            class="btn btn-primary"
+            class="btn btn-primary overview-action-button"
             @click="showNewFunctions"
           >
-            New Functions
+            <span class="overview-action-button__label">New Functions</span>
           </button>
         </div>
 
         <div class="d-flex align-items-center gap-2">
           <button
             type="button"
-            class="btn btn-outline-secondary px-3"
+            class="btn btn-outline-secondary px-3 toolbar-outline-button overview-action-button"
             @click="switchLights()"
             title="Switch between light and dark mode"
           >
-            <i :class="lightMode"></i>
+            <span class="overview-action-button__label overview-action-button__label--icon">
+              <i :class="lightMode"></i>
+            </span>
           </button>
 
-          <button class="btn btn-primary" @click="newCourse">New Course</button>
+          <div class="overview-translation position-relative">
+            <button
+              type="button"
+              class="btn btn-outline-secondary px-3 toolbar-outline-button overview-action-button"
+              title="Translate overview"
+              @click="toggleTranslationDropdown"
+            >
+              <span class="overview-action-button__label">{{ currentTranslationLabel }}</span>
+            </button>
+
+            <div
+              v-if="translationDropdownOpen"
+              class="overview-translation-menu shadow rounded bg-body border"
+            >
+              <button
+                v-for="language in translationLanguages"
+                :key="language.code"
+                type="button"
+                class="dropdown-item overview-translation-item"
+                :class="{ active: translationLanguage === language.code }"
+                @click="changeOverviewLanguage(language.code)"
+              >
+                <span class="overview-translation-code">
+                  {{ language.code.split('-')[0].toUpperCase() }}
+                </span>
+                {{ language.label }}
+              </button>
+            </div>
+          </div>
+
+          <button class="btn btn-primary overview-action-button" @click="newCourse">
+            <span class="overview-action-button__label">New Course</span>
+          </button>
         </div>
       </div>
     </nav>
 
+    <div id="google_translate_element" class="visually-hidden"></div>
+
     <div
-      class="container mx-0 px-0 pb-5"
+      class="container-fluid px-0 pb-5"
       style="max-width: 100vw !important; height: 100%; overflow: scroll"
     >
-    <div class="input-group" style="padding: 2rem 5rem 0rem 5rem">
+    <div class="px-4 mt-4 mb-0">
+      <div style="width: min(100%, 50rem); margin: 0 auto">
+        <NewCourseCard @create="newCourse" />
+      </div>
+    </div>
+
+    <div class="mx-auto mt-5 mb-5" style="width: 95vw">
+      <hr class="overview-divider mb-4" />
+      <hr class="overview-divider mt-4 mb-0" />
+    </div>
+
+    <div class="input-group" style="padding: 0rem 5rem 0rem 5rem">
       <input
         class="form-control"
         placeholder="Type to search..."
@@ -395,3 +666,81 @@ export default {
     </div>
   </div>
 </template>
+
+<style scoped>
+.toolbar-outline-button {
+  border-width: 2px;
+}
+
+.overview-action-button {
+  height: 40px !important;
+  min-height: 40px;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+  line-height: 1;
+  text-align: center;
+  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.overview-action-button__label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  line-height: 1;
+  text-align: center;
+}
+
+.overview-action-button__label--icon {
+  width: auto;
+}
+
+.overview-action-button__label :deep(font) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.overview-divider {
+  border-top: 2px solid #147375;
+  opacity: 1;
+}
+
+.overview-translation-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 20;
+  min-width: 15rem;
+  max-height: 20rem;
+  overflow: auto;
+  border-color: #147375 !important;
+}
+
+.overview-translation-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.85rem;
+}
+
+.overview-translation-item.active,
+.overview-translation-item:active,
+.overview-translation-item:hover {
+  background-color: rgba(20, 115, 117, 0.14);
+  color: inherit;
+}
+
+.overview-translation-code {
+  min-width: 2rem;
+  font-weight: 700;
+  color: #147375;
+}
+</style>
