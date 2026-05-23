@@ -1115,43 +1115,27 @@ I (study) ~[[ am going to study ]]~ harder this term.
                 ? decodeURIComponent(liaScriptMatch[1])
                 : url;
 
-              // Laden des Inhalts der Markdown-Datei
-              const response = await fetch(fetchUrl);
+              const markdownContent = await Utils.loadMarkdownImport(fetchUrl);
 
-              if (!response.ok) {
-                throw new Error(`HTTP error! Status: ${response.status}`);
+              if (!markdownContent) {
+                throw new Error("Could not load markdown content");
               }
 
-              const markdownContent = await response.text();
+              const model = Editor.getModel();
 
-              // Suche nach der ersten Überschrift und schneide alles davor ab
-              let processedContent = markdownContent;
-              const headingMatch = markdownContent.match(/^#{1,6}\s+.*$/m);
-
-              if (headingMatch) {
-                // Index des ersten Zeichens nach der Zeile mit der Überschrift
-                const headingEndIndex =
-                  markdownContent.indexOf(headingMatch[0]) + headingMatch[0].length;
-                // Alles nach der Überschrift
-                processedContent = markdownContent.substring(headingEndIndex);
-
-                // Entferne führende Leerzeilen
-                processedContent = processedContent.replace(/^\n+/, "");
+              if (!model) {
+                throw new Error("No editor model available");
               }
 
-              // Aktuelle Cursor-Position
-              const position = Editor.getPosition();
+              const mergedContent = Utils.mergeMarkdownDocuments([
+                model.getValue(),
+                markdownContent,
+              ]);
 
-              // Inhalt an Cursor-Position einfügen
               Editor.executeEdits("", [
                 {
-                  range: {
-                    startLineNumber: position?.lineNumber || 1,
-                    startColumn: position?.column || 1,
-                    endLineNumber: position?.lineNumber || 1,
-                    endColumn: position?.column || 1,
-                  },
-                  text: processedContent,
+                  range: model.getFullModelRange(),
+                  text: mergedContent,
                 },
               ]);
 

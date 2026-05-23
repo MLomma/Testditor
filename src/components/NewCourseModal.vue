@@ -15,15 +15,35 @@ export default {
     return {
       author: "",
       language: getSuggestedCourseLanguage(),
-      link: "",
+      links: ["", ""],
       languages: CourseLanguages,
     };
   },
 
   methods: {
+    linkLabel(index: number) {
+      if (index === 0) {
+        return "Link";
+      }
+
+      if (index === 1) {
+        return "Second Link";
+      }
+
+      return `Link ${index + 1}`;
+    },
+
+    linkId(index: number) {
+      return `new-course-link-${index + 1}`;
+    },
+
+    addLinkField() {
+      this.links.push("");
+    },
+
     submit() {
       const author = this.author.trim();
-      const link = this.link.trim();
+      const links = this.links.map((link) => link.trim());
 
       if (!author) {
         return;
@@ -32,7 +52,7 @@ export default {
       this.$emit("create", {
         author,
         language: this.language,
-        link,
+        links,
       });
     },
 
@@ -95,16 +115,35 @@ export default {
             </select>
           </div>
 
-          <div class="mt-3">
-            <label class="form-label" for="new-course-link">Link</label>
+          <div v-for="(link, index) in links" :key="linkId(index)" class="mt-3">
+            <label class="form-label" :for="linkId(index)">
+              {{ linkLabel(index) }}
+            </label>
             <input
-              id="new-course-link"
-              v-model="link"
+              :id="linkId(index)"
+              v-model="links[index]"
               type="url"
               class="form-control"
-              placeholder="Optional link to a Markdown file"
+              :placeholder="
+                index === 0
+                  ? 'Optional link to a Markdown file'
+                  : `Optional merge link ${index + 1}`
+              "
               @keyup.enter="submit"
             />
+          </div>
+
+          <div class="d-flex justify-content-center mt-3">
+            <button
+              type="button"
+              class="btn btn-outline-secondary rounded-circle"
+              style="width: 2.75rem; height: 2.75rem"
+              aria-label="Add another merge link"
+              title="Add another merge link"
+              @click="addLinkField"
+            >
+              +
+            </button>
           </div>
         </div>
 

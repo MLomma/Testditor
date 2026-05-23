@@ -1,0 +1,7 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "Push-Location": true,
+        "&": true,
+        "Pop-Location": true
+    }
+}

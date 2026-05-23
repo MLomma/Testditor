@@ -15,10 +15,10 @@ import { Splitpanes, Pane } from "splitpanes";
 import "splitpanes/dist/splitpanes.css";
 
 import {
-  isMarkdownImportUrl,
   LiaScriptURL,
   createCourseTemplate,
-  loadMarkdownImport,
+  loadAndMergeMarkdownImports,
+  mergeMarkdownTemplateHeader,
   storePendingNewCourseTemplate,
   urlPath,
 } from "../ts/utils";
@@ -135,19 +135,26 @@ export default {
     async createNewCourse(params: {
       author: string;
       language: string;
+      links?: string[];
       link?: string;
+      secondaryLink?: string;
     }) {
       let content = createCourseTemplate(params.author, params.language);
-      if (params.link && isMarkdownImportUrl(params.link)) {
-        try {
-          const importedContent = await loadMarkdownImport(params.link);
+      try {
+        const mergeLinks =
+          params.links && params.links.length > 0
+            ? params.links
+            : [params.link || "", params.secondaryLink || ""];
 
-          if (importedContent) {
-            content = importedContent;
-          }
-        } catch (error) {
-          console.warn("Could not import markdown for new course", error);
+        const importedContent = await loadAndMergeMarkdownImports(
+          ...mergeLinks
+        );
+
+        if (importedContent) {
+          content = mergeMarkdownTemplateHeader(content, importedContent);
         }
+      } catch (error) {
+        console.warn("Could not import markdown for new course", error);
       }
 
       storePendingNewCourseTemplate(content);

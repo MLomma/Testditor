@@ -2,6 +2,7 @@
 import Dexie from "../ts/indexDB";
 import Card from "../components/Card.vue";
 import Footer from "../components/Footer.vue";
+import Modal from "../components/Modal.vue";
 import NewCourseModal from "../components/NewCourseModal.vue";
 import * as Y from "yjs";
 import { IndexeddbPersistence } from "y-indexeddb";
@@ -160,6 +161,28 @@ export default {
       this.showNewCourseModal = true;
     },
 
+    showNewFunctions() {
+      this.$refs.modal.show(
+        "New Functions",
+        `
+        <p class="mb-3">
+          These additions are currently proof of principles and nothing more.
+          They are meant to demonstrate the workflows directly inside the LiveEditor.
+        </p>
+
+        <ul class="mb-0">
+          <li><strong>Start dialog:</strong> A new course overlay now asks for your name, language, and merge links before the editor opens.</li>
+          <li><strong>Dark mode:</strong> The overview and editor now support direct light and dark mode switching.</li>
+          <li><strong>Drag and drop into the editor:</strong> Media such as images, audio, and video can be dropped directly into the editor.</li>
+          <li><strong>More user-friendly editor controls:</strong> Plus and minus buttons in the editor improve handling and make common actions easier to access.</li>
+          <li><strong>Dragging in the live preview:</strong> At least images can now be reordered directly inside the preview area.</li>
+          <li><strong>Merging multiple links before start:</strong> Several Markdown links can be entered before opening a new course and merged into one document.</li>
+          <li><strong>Merging by drag and drop into the editor:</strong> Dropping a Markdown link into the editor now merges it with the current document instead of only inserting content.</li>
+        </ul>
+        `
+      );
+    },
+
     switchLights() {
       const config = Utils.loadConfig();
 
@@ -171,19 +194,26 @@ export default {
     async createNewCourse(params: {
       author: string;
       language: string;
+      links?: string[];
       link?: string;
+      secondaryLink?: string;
     }) {
       let content = Utils.createCourseTemplate(params.author, params.language);
-      if (params.link && Utils.isMarkdownImportUrl(params.link)) {
-        try {
-          const importedContent = await Utils.loadMarkdownImport(params.link);
+      try {
+        const mergeLinks =
+          params.links && params.links.length > 0
+            ? params.links
+            : [params.link || "", params.secondaryLink || ""];
 
-          if (importedContent) {
-            content = importedContent;
-          }
-        } catch (error) {
-          console.warn("Could not import markdown for new course", error);
+        const importedContent = await Utils.loadAndMergeMarkdownImports(
+          ...mergeLinks
+        );
+
+        if (importedContent) {
+          content = Utils.mergeMarkdownTemplateHeader(content, importedContent);
         }
+      } catch (error) {
+        console.warn("Could not import markdown for new course", error);
       }
 
       Utils.storePendingNewCourseTemplate(content);
@@ -229,7 +259,7 @@ export default {
     await this.init();
   },
 
-  components: { Card, Footer, NewCourseModal },
+  components: { Card, Footer, Modal, NewCourseModal },
 };
 </script>
 
@@ -237,10 +267,20 @@ export default {
   <div :data-bs-theme="lights ? 'light' : 'dark'" class="bg-body text-body min-vh-100">
     <nav class="navbar navbar-expand-lg" :class="lights ? 'navbar-light bg-light' : 'navbar-dark bg-dark'">
       <div class="container-fluid">
-        <a class="navbar-brand">
-          <img :src="logoImg" alt="LiaScript" height="28" />
-          LiaEdit
-        </a>
+        <div class="d-flex align-items-center gap-3">
+          <a class="navbar-brand mb-0">
+            <img :src="logoImg" alt="LiaScript" height="28" />
+            LiaEdit
+          </a>
+
+          <button
+            type="button"
+            class="btn btn-primary"
+            @click="showNewFunctions"
+          >
+            New Functions
+          </button>
+        </div>
 
         <div class="d-flex align-items-center gap-2">
           <button
@@ -350,6 +390,8 @@ export default {
         @close="showNewCourseModal = false"
         @create="createNewCourse"
       />
+
+      <Modal ref="modal" />
     </div>
   </div>
 </template>
