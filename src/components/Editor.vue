@@ -440,6 +440,195 @@ export default {
       return normalized;
     },
 
+    normalizeHeadingText(text: string) {
+      return (text || "").replace(/\s+/g, " ").trim();
+    },
+
+    findSectionRangeByHeading(lines: string[], headingText: string) {
+      const normalizedHeading = this.normalizeHeadingText(headingText);
+
+      if (!normalizedHeading) {
+        return null;
+      }
+
+      for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+        const match = lines[lineIndex].replace(/\r$/, "").match(/^(#{1,6})\s+(.*)$/);
+
+        if (!match) {
+          continue;
+        }
+
+        const level = match[1].length;
+        const title = this.normalizeHeadingText(match[2]);
+
+        if (title !== normalizedHeading) {
+          continue;
+        }
+
+        let endExclusive = lines.length;
+
+        for (let nextIndex = lineIndex + 1; nextIndex < lines.length; nextIndex++) {
+          const nextMatch = lines[nextIndex].replace(/\r$/, "").match(/^(#{1,6})\s+(.*)$/);
+
+          if (nextMatch && nextMatch[1].length <= level) {
+            endExclusive = nextIndex;
+            break;
+          }
+        }
+
+        return {
+          headingLineIndex: lineIndex,
+          contentStart: lineIndex + 1,
+          contentEndExclusive: endExclusive,
+        };
+      }
+
+      return null;
+    },
+
+    getReorderableBlocks(lines: string[], start: number, endExclusive: number) {
+      const blocks: Array<{ start: number; endExclusive: number; lines: string[] }> = [];
+      let lineIndex = start;
+
+      while (lineIndex < endExclusive) {
+        while (lineIndex < endExclusive && lines[lineIndex].trim() === "") {
+          lineIndex += 1;
+        }
+
+        if (lineIndex >= endExclusive) {
+          break;
+        }
+
+        const blockStart = lineIndex;
+        let blockEnd = lineIndex;
+        let fenceDelimiter = "";
+
+        while (blockEnd < endExclusive) {
+          const line = lines[blockEnd];
+          const fenceMatch = line.match(/^\s*(```+|~~~+)/);
+
+          if (fenceMatch) {
+            if (!fenceDelimiter) {
+              fenceDelimiter = fenceMatch[1][0].repeat(fenceMatch[1].length);
+            } else if (line.trim().startsWith(fenceDelimiter)) {
+              fenceDelimiter = "";
+            }
+
+            blockEnd += 1;
+            continue;
+          }
+
+          if (!fenceDelimiter && line.trim() === "") {
+            break;
+          }
+
+          blockEnd += 1;
+        }
+
+        blocks.push({
+          start: blockStart,
+          endExclusive: blockEnd,
+          lines: lines.slice(blockStart, blockEnd),
+        });
+
+        lineIndex = blockEnd;
+      }
+
+      return blocks;
+    },
+
+    reorderPreviewBlocks(params: {
+      headingText: string;
+      draggedBlockIndex: number;
+      targetBlockIndex: number;
+      position: "before" | "after";
+    }) {
+      if (!Editor) {
+        return false;
+      }
+
+      const code = Editor.getValue();
+
+      if (!code) {
+        return false;
+      }
+
+      const eol = Editor.getModel()?.getEOL() || "\n";
+      const hasTrailingNewline = /\r?\n$/.test(code);
+      const lines = code.split(/\r?\n/);
+      const section = this.findSectionRangeByHeading(lines, params.headingText);
+
+      if (!section) {
+        return false;
+      }
+
+      const blocks = this.getReorderableBlocks(
+        lines,
+        section.contentStart,
+        section.contentEndExclusive
+      );
+
+      const draggedBlock = blocks[params.draggedBlockIndex];
+      const targetBlock = blocks[params.targetBlockIndex];
+
+      if (!draggedBlock || !targetBlock || params.draggedBlockIndex === params.targetBlockIndex) {
+        return false;
+      }
+
+      const orderedBlocks = blocks.map((block) => [...block.lines]);
+      const movedBlock = orderedBlocks.splice(params.draggedBlockIndex, 1)[0];
+
+      let insertAt = params.position === "after" ? params.targetBlockIndex + 1 : params.targetBlockIndex;
+
+      if (params.draggedBlockIndex < insertAt) {
+        insertAt -= 1;
+      }
+
+      orderedBlocks.splice(insertAt, 0, movedBlock);
+
+      const leadingLines = lines.slice(section.contentStart, blocks[0]?.start || section.contentEndExclusive);
+      const trailingLines = lines.slice(
+        blocks[blocks.length - 1]?.endExclusive || section.contentStart,
+        section.contentEndExclusive
+      );
+      const rebuiltSectionLines = [...leadingLines];
+
+      orderedBlocks.forEach((blockLines, index) => {
+        if (
+          index > 0 &&
+          rebuiltSectionLines.length > 0 &&
+          rebuiltSectionLines[rebuiltSectionLines.length - 1].trim() !== ""
+        ) {
+          rebuiltSectionLines.push("");
+        }
+
+        rebuiltSectionLines.push(...blockLines);
+      });
+
+      rebuiltSectionLines.push(...trailingLines);
+
+      const nextLines = [
+        ...lines.slice(0, section.contentStart),
+        ...rebuiltSectionLines,
+        ...lines.slice(section.contentEndExclusive),
+      ];
+      const nextCode = nextLines.join(eol) + (hasTrailingNewline ? eol : "");
+
+      if (nextCode === code) {
+        return false;
+      }
+
+      Editor.executeEdits("preview-block-reorder", [
+        {
+          range: Editor.getModel().getFullModelRange(),
+          text: nextCode,
+        },
+      ]);
+
+      Editor.focus();
+      return true;
+    },
+
     reorderStandaloneMedia(params: {
       draggedSrc: string;
       draggedOccurrence: number;

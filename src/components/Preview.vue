@@ -3,7 +3,9 @@ const INIT_CODE = `
 var blob = {};
 var previewDragState = null;
 var previewPointerDragState = null;
+var previewBlockDragState = null;
 var previewReorderObserver = null;
+var previewBlockOutlineStyleId = 'lia-preview-block-outline-style';
 
 window.normalizePreviewSource = function (src) {
   if (!src) {
@@ -15,6 +17,243 @@ window.normalizePreviewSource = function (src) {
   }
 
   return decodeURIComponent(src)
+}
+
+window.ensurePreviewBlockOutlineStyle = function () {
+  if (document.getElementById(previewBlockOutlineStyleId)) {
+    return
+  }
+
+  const style = document.createElement('style')
+  style.id = previewBlockOutlineStyleId
+  style.textContent = [
+    'main > .lia-preview-block {',
+    '  position: relative;',
+    '  border: 2px dashed rgba(56, 204, 204, 0.7);',
+    '  border-radius: 0.9rem;',
+    '  padding: 1rem 1.1rem;',
+    '  margin-block: 1rem;',
+    '  cursor: grab;',
+    '}',
+    'main > .lia-preview-block[data-lia-block-dragging="true"] {',
+    '  cursor: grabbing;',
+    '  opacity: 0.72;',
+    '}',
+    'main > .lia-preview-block[data-lia-block-drop="before"]::before,',
+    'main > .lia-preview-block[data-lia-block-drop="after"]::after {',
+    "  content: '';",
+    '  position: absolute;',
+    '  left: -0.15rem;',
+    '  right: -0.15rem;',
+    '  height: 0.3rem;',
+    '  border-radius: 999px;',
+    '  background: #38CCCC;',
+    '  box-shadow: 0 0 0.55rem rgba(56, 204, 204, 0.95), 0 0 1.1rem rgba(56, 204, 204, 0.55);',
+    '  pointer-events: none;',
+    '}',
+    'main > .lia-preview-block[data-lia-block-drop="before"]::before {',
+    '  top: -0.75rem;',
+    '}',
+    'main > .lia-preview-block[data-lia-block-drop="after"]::after {',
+    '  bottom: -0.75rem;',
+    '}',
+    'main > .lia-preview-block:first-child {',
+    '  margin-top: 0.35rem;',
+    '}',
+    'main > .lia-preview-block > :first-child {',
+    '  margin-top: 0;',
+    '}',
+    'main > .lia-preview-block > :last-child {',
+    '  margin-bottom: 0;',
+    '}',
+  ].join('\n')
+
+  document.head.appendChild(style)
+}
+
+window.decoratePreviewBlocks = function () {
+  const main = document.querySelector('main')
+  if (!main) {
+    return
+  }
+
+  window.ensurePreviewBlockOutlineStyle()
+
+  const blocks = main.querySelectorAll(':scope > *')
+  let blockIndex = 0
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i]
+
+    if (!(block instanceof HTMLElement)) {
+      continue
+    }
+
+    if (block.tagName === 'HEADER') {
+      block.classList.remove('lia-preview-block')
+      block.removeAttribute('data-lia-block-index')
+      continue
+    }
+
+    block.classList.add('lia-preview-block')
+    block.dataset.liaBlockIndex = String(blockIndex)
+    blockIndex += 1
+  }
+}
+
+window.clearPreviewBlockDropPreview = function () {
+  const blocks = document.querySelectorAll('.lia-preview-block[data-lia-block-drop]')
+
+  for (let i = 0; i < blocks.length; i++) {
+    blocks[i].removeAttribute('data-lia-block-drop')
+  }
+}
+
+window.clearPreviewBlockDragState = function () {
+  previewBlockDragState = null
+
+  const blocks = document.querySelectorAll('.lia-preview-block[data-lia-block-dragging]')
+
+  for (let i = 0; i < blocks.length; i++) {
+    blocks[i].removeAttribute('data-lia-block-dragging')
+  }
+
+  window.clearPreviewBlockDropPreview()
+}
+
+window.findPreviewBlockTarget = function (node) {
+  if (!node || !node.closest) {
+    return null
+  }
+
+  const candidate = node.closest('.lia-preview-block')
+
+  return candidate && candidate.closest('main') ? candidate : null
+}
+
+window.installPreviewBlockReorderHandlers = function () {
+  if (window.previewBlockReorderHandlersInstalled) {
+    return
+  }
+
+  window.previewBlockReorderHandlersInstalled = true
+}
+
+window.bindPreviewBlockReorder = function (elem) {
+  if (elem.dataset && elem.dataset.liaBlockReorderBound === 'true') {
+    return
+  }
+
+  elem.draggable = true
+
+  elem.addEventListener('dragstart', function (event) {
+    const interactiveTarget =
+      event.target && event.target.closest
+        ? event.target.closest('input, textarea, select, button, a, label, summary, audio, video, img')
+        : null
+
+    if (interactiveTarget) {
+      event.preventDefault()
+      window.clearPreviewBlockDragState()
+      return
+    }
+
+    previewBlockDragState = {
+      blockIndex: Number(elem.dataset.liaBlockIndex || -1),
+      headingText: (document.querySelector('main > header')?.textContent || '').trim(),
+    }
+
+    elem.dataset.liaBlockDragging = 'true'
+    window.clearPreviewBlockDropPreview()
+
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move'
+      event.dataTransfer.setData('text/plain', elem.dataset.liaBlockIndex || '')
+    }
+  })
+
+  elem.addEventListener('dragover', function (event) {
+    if (!previewBlockDragState) {
+      return
+    }
+
+    const targetIndex = Number(elem.dataset.liaBlockIndex || -1)
+
+    if (targetIndex < 0 || targetIndex === previewBlockDragState.blockIndex) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    window.clearPreviewBlockDropPreview()
+
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move'
+    }
+
+    const rect = elem.getBoundingClientRect()
+    const position = event.clientY > rect.top + rect.height / 2 ? 'after' : 'before'
+
+    elem.dataset.liaBlockDrop = position
+  })
+
+  elem.addEventListener('dragleave', function (event) {
+    if (!elem.contains(event.relatedTarget)) {
+      elem.removeAttribute('data-lia-block-drop')
+    }
+  })
+
+  elem.addEventListener('drop', function (event) {
+    if (!previewBlockDragState) {
+      return
+    }
+
+    const targetIndex = Number(elem.dataset.liaBlockIndex || -1)
+
+    if (targetIndex < 0 || targetIndex === previewBlockDragState.blockIndex) {
+      window.clearPreviewBlockDragState()
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+
+    const rect = elem.getBoundingClientRect()
+    const position = event.clientY > rect.top + rect.height / 2 ? 'after' : 'before'
+
+    parent.postMessage(
+      {
+        cmd: 'preview.reorder',
+        param: {
+          kind: 'block',
+          headingText: previewBlockDragState.headingText,
+          draggedBlockIndex: previewBlockDragState.blockIndex,
+          targetBlockIndex: targetIndex,
+          position,
+        },
+      },
+      '*'
+    )
+
+    window.clearPreviewBlockDragState()
+  })
+
+  elem.addEventListener('dragend', function () {
+    window.clearPreviewBlockDragState()
+  })
+
+  if (elem.dataset) {
+    elem.dataset.liaBlockReorderBound = 'true'
+  }
+}
+
+window.enablePreviewBlockReorder = function () {
+  window.decoratePreviewBlocks()
+  window.installPreviewBlockReorderHandlers()
+
+  const blocks = document.querySelectorAll('main > .lia-preview-block')
+  for (let i = 0; i < blocks.length; i++) {
+    window.bindPreviewBlockReorder(blocks[i])
+  }
 }
 
 window.getMediaSource = function (elem) {
@@ -338,6 +577,10 @@ window.observePreviewReorder = function () {
     if (window.enablePreviewReorder) {
       window.enablePreviewReorder()
     }
+
+    if (window.enablePreviewBlockReorder) {
+      window.enablePreviewBlockReorder()
+    }
   })
 
   previewReorderObserver.observe(document.body, {
@@ -492,6 +735,7 @@ window.LIA.fetchError = (tag, src) => {
 
 window.installPreviewReorderHandlers()
 window.observePreviewReorder()
+window.enablePreviewBlockReorder()
 `;
 
 export default {
@@ -540,13 +784,275 @@ export default {
     return {
       isReady: false,
       // @ts-ignore
+      previewBlockPointerDragState: null,
       responsiveVoiceKey: process.env.RESPONSIVEVOICE_KEY,
+      previewBlockObserver: null,
       sendToLia: null,
-      origin: window.location.origin + window.location.pathname + "liascript/index.html?",
+      origin: new URL("liascript/index.html?", window.location.origin + window.location.pathname).toString(),
     };
   },
 
   methods: {
+    getPreviewBlockTarget(node: EventTarget | null) {
+      if (!node || typeof (node as Element).closest !== "function") {
+        return null;
+      }
+
+      return (node as Element).closest(".lia-preview-block") as HTMLElement | null;
+    },
+
+    clearPreviewBlockDropPreview(previewDocument?: Document | null) {
+      const previewRoot = previewDocument || document.getElementById("liascript-preview")?.contentDocument;
+
+      previewRoot
+        ?.querySelectorAll(".lia-preview-block[data-lia-block-drop]")
+        .forEach((node) => node.removeAttribute("data-lia-block-drop"));
+    },
+
+    clearPreviewBlockDragState(previewDocument?: Document | null) {
+      const previewRoot = previewDocument || document.getElementById("liascript-preview")?.contentDocument;
+
+      this.previewBlockPointerDragState = null;
+
+      previewRoot
+        ?.querySelectorAll(".lia-preview-block[data-lia-block-dragging]")
+        .forEach((node) => node.removeAttribute("data-lia-block-dragging"));
+
+      this.clearPreviewBlockDropPreview(previewRoot || undefined);
+    },
+
+    bindPreviewBlockInteractions() {
+      const iframe = document.getElementById("liascript-preview") as HTMLIFrameElement | null;
+      const previewDocument = iframe?.contentDocument;
+      const main = previewDocument?.querySelector("main");
+
+      if (!previewDocument?.body || !main) {
+        return;
+      }
+
+      Array.from(main.querySelectorAll(":scope > .lia-preview-block")).forEach((node) => {
+        if (!(node instanceof iframe.contentWindow!.HTMLElement)) {
+          return;
+        }
+
+        if (node.dataset.liaBlockReorderBound === "true") {
+          node.draggable = true;
+          return;
+        }
+
+        node.draggable = true;
+
+        node.addEventListener("dragstart", (event) => {
+          const interactiveTarget =
+            event.target && typeof (event.target as Element).closest === "function"
+              ? (event.target as Element).closest(
+                  "input, textarea, select, button, a, label, summary, audio, video, img"
+                )
+              : null;
+
+          if (interactiveTarget) {
+            event.preventDefault();
+            this.clearPreviewBlockDragState(previewDocument);
+            return;
+          }
+
+          this.previewBlockPointerDragState = {
+            blockIndex: Number(node.dataset.liaBlockIndex || -1),
+            headingText:
+              (previewDocument.querySelector("main > header")?.textContent || "").trim(),
+          };
+
+          node.dataset.liaBlockDragging = "true";
+          this.clearPreviewBlockDropPreview(previewDocument);
+
+          if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData("text/plain", node.dataset.liaBlockIndex || "");
+          }
+        });
+
+        node.addEventListener("dragover", (event) => {
+          const dragState = this.previewBlockPointerDragState;
+          const targetIndex = Number(node.dataset.liaBlockIndex || -1);
+
+          if (!dragState || targetIndex < 0 || targetIndex === dragState.blockIndex) {
+            return;
+          }
+
+          event.preventDefault();
+          event.stopPropagation();
+          this.clearPreviewBlockDropPreview(previewDocument);
+
+          if (event.dataTransfer) {
+            event.dataTransfer.dropEffect = "move";
+          }
+
+          const rect = node.getBoundingClientRect();
+          const position = event.clientY > rect.top + rect.height / 2 ? "after" : "before";
+
+          node.dataset.liaBlockDrop = position;
+        });
+
+        node.addEventListener("dragleave", (event) => {
+          if (!node.contains(event.relatedTarget as Node | null)) {
+            node.removeAttribute("data-lia-block-drop");
+          }
+        });
+
+        node.addEventListener("drop", (event) => {
+          const dragState = this.previewBlockPointerDragState;
+          const targetIndex = Number(node.dataset.liaBlockIndex || -1);
+
+          if (!dragState || targetIndex < 0 || targetIndex === dragState.blockIndex) {
+            this.clearPreviewBlockDragState(previewDocument);
+            return;
+          }
+
+          event.preventDefault();
+          event.stopPropagation();
+
+          const rect = node.getBoundingClientRect();
+          const position = event.clientY > rect.top + rect.height / 2 ? "after" : "before";
+          const payload = {
+            kind: "block",
+            headingText: dragState.headingText,
+            draggedBlockIndex: dragState.blockIndex,
+            targetBlockIndex: targetIndex,
+            position,
+          };
+          const parent = this.$parent as any;
+
+          if (typeof parent?.reorderPreviewMedia === "function") {
+            parent.reorderPreviewMedia(payload);
+          } else {
+            this.$emit("reorder", payload);
+          }
+
+          this.clearPreviewBlockDragState(previewDocument);
+        });
+
+        node.addEventListener("dragend", () => {
+          this.clearPreviewBlockDragState(previewDocument);
+        });
+
+        node.dataset.liaBlockReorderBound = "true";
+      });
+    },
+
+    decoratePreviewBlocks() {
+      const iframe = document.getElementById("liascript-preview") as HTMLIFrameElement | null;
+      const previewDocument = iframe?.contentDocument;
+      const main = previewDocument?.querySelector("main");
+
+      if (!previewDocument?.head || !main) {
+        return;
+      }
+
+      if (!previewDocument.getElementById("lia-preview-block-outline-style")) {
+        const style = previewDocument.createElement("style");
+        style.id = "lia-preview-block-outline-style";
+        style.textContent = [
+          "main > .lia-preview-block {",
+          "  position: relative;",
+          "  border: 2px dashed rgba(56, 204, 204, 0.7);",
+          "  border-radius: 0.9rem;",
+          "  padding: 1rem 1.1rem;",
+          "  margin-block: 1rem;",
+          "  cursor: grab;",
+          "  transition: border-color 120ms ease, box-shadow 120ms ease, opacity 120ms ease;",
+          "}",
+          "main > .lia-preview-block[data-lia-block-dragging='true'] {",
+          "  cursor: grabbing;",
+          "  opacity: 0.72;",
+          "}",
+          "main > .lia-preview-block[data-lia-block-drop='before']::before,",
+          "main > .lia-preview-block[data-lia-block-drop='after']::after {",
+          "  content: '';",
+          "  position: absolute;",
+          "  left: -0.15rem;",
+          "  right: -0.15rem;",
+          "  height: 0.3rem;",
+          "  border-radius: 999px;",
+          "  background: #38CCCC;",
+          "  box-shadow: 0 0 0.55rem rgba(56, 204, 204, 0.95), 0 0 1.1rem rgba(56, 204, 204, 0.55);",
+          "  pointer-events: none;",
+          "}",
+          "main > .lia-preview-block[data-lia-block-drop='before']::before {",
+          "  top: -0.75rem;",
+          "}",
+          "main > .lia-preview-block[data-lia-block-drop='after']::after {",
+          "  bottom: -0.75rem;",
+          "}",
+          "main > .lia-preview-block:first-child {",
+          "  margin-top: 0.35rem;",
+          "}",
+          "main > .lia-preview-block > :first-child {",
+          "  margin-top: 0;",
+          "}",
+          "main > .lia-preview-block > :last-child {",
+          "  margin-bottom: 0;",
+          "}",
+        ].join("\n");
+
+        previewDocument.head.appendChild(style);
+      }
+
+      Array.from(main.children).forEach((node) => {
+        if (!(node instanceof iframe.contentWindow!.HTMLElement)) {
+          return;
+        }
+
+        if (node.tagName === "HEADER") {
+          node.classList.remove("lia-preview-block");
+          node.removeAttribute("data-lia-block-index");
+          return;
+        }
+
+        node.classList.add("lia-preview-block");
+        node.dataset.liaBlockIndex = String(
+          main.querySelectorAll(":scope > .lia-preview-block").length
+        );
+      });
+
+      let blockIndex = 0;
+      Array.from(main.children).forEach((node) => {
+        if (!(node instanceof iframe.contentWindow!.HTMLElement)) {
+          return;
+        }
+
+        if (!node.classList.contains("lia-preview-block")) {
+          return;
+        }
+
+        node.dataset.liaBlockIndex = String(blockIndex);
+        blockIndex += 1;
+      });
+
+      this.bindPreviewBlockInteractions();
+
+    },
+
+    observePreviewBlocks() {
+      const iframe = document.getElementById("liascript-preview") as HTMLIFrameElement | null;
+      const previewDocument = iframe?.contentDocument;
+
+      if (!previewDocument?.body) {
+        return;
+      }
+
+      this.previewBlockObserver?.disconnect();
+      this.previewBlockObserver = new MutationObserver(() => {
+        this.decoratePreviewBlocks();
+      });
+
+      this.previewBlockObserver.observe(previewDocument.body, {
+        childList: true,
+        subtree: true,
+      });
+
+      this.decoratePreviewBlocks();
+    },
+
     lockPreviewTranslation() {
       const iframe = document.getElementById("liascript-preview") as HTMLIFrameElement | null;
 
@@ -563,6 +1069,8 @@ export default {
       previewDocument.documentElement.classList.add("notranslate");
       previewDocument.body.setAttribute("translate", "no");
       previewDocument.body.classList.add("notranslate");
+
+      this.observePreviewBlocks();
     },
 
     onReady(params: any) {
@@ -595,9 +1103,11 @@ export default {
       if (this.sendToLia) {
         this.sendToLia(
           "eval",
-          "setTimeout(function(){ if (window.enablePreviewReorder) { window.enablePreviewReorder(); } }, 0)"
+          "setTimeout(function(){ if (window.enablePreviewReorder) { window.enablePreviewReorder(); } if (window.enablePreviewBlockReorder) { window.enablePreviewBlockReorder(); } }, 0)"
         );
       }
+
+      this.decoratePreviewBlocks();
 
       if (params) {
         this.$emit("update", params);
@@ -609,6 +1119,7 @@ export default {
     const iframe = document.getElementById("liascript-preview");
 
     iframe?.addEventListener("load", this.lockPreviewTranslation);
+
     this.lockPreviewTranslation();
 
     // @ts-ignore

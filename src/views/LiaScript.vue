@@ -486,7 +486,10 @@ export default {
         return;
       }
 
-      const changed = this.$refs.editor.reorderStandaloneMedia(params);
+      const changed =
+        params?.kind === "block"
+          ? this.$refs.editor.reorderPreviewBlocks(params)
+          : this.$refs.editor.reorderStandaloneMedia(params);
 
       if (changed) {
         this.compile();
