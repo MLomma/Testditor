@@ -123,9 +123,9 @@ const TOOLBAR_CATEGORIES = [
         actions: [
           toolbarAction("Bold", "bold", "bi-type-bold"),
           toolbarAction("Italic", "italic", "bi-type-italic"),
+          toolbarAction("Underline", "underline", "bi-type-underline"),
           toolbarAction("Heading", "header", "bi-type-h1"),
           toolbarAction("Strikethrough", "strikethrough", "bi-type-strikethrough"),
-          toolbarAction("Underline", "underline", "bi-type-underline"),
           toolbarAction("Superscript", "superscript", "bi-superscript"),
           toolbarAction("Inline Code", "code-inline", "bi-code"),
           toolbarAction("Keyboard", "keyboard", "bi-keyboard"),
@@ -134,10 +134,10 @@ const TOOLBAR_CATEGORIES = [
       {
         label: "Structure",
         actions: [
-          toolbarAction("Quote", "quote", "bi-quote"),
           toolbarAction("List", "list-unordered", "bi-list-ul"),
           toolbarAction("Numbered List", "list-ordered", "bi-list-ol"),
           toolbarAction("Check List", "list-check", "bi-check-square"),
+          toolbarAction("Quote", "quote", "bi-quote"),
           toolbarAction("Table", "table", "bi-table"),
           toolbarAction("Horizontal Line", "line", "bi-hr"),
         ],
@@ -154,19 +154,6 @@ const TOOLBAR_CATEGORIES = [
           toolbarAction("Code Block", "code", "bi-code-slash"),
           toolbarAction("Executable Code", "code-executable", "bi-terminal"),
           toolbarAction("Executable Code Project", "code-project", "bi-terminal-split"),
-          toolbarAction("Initialize empty document", "init", "bi-rocket-takeoff"),
-        ],
-      },
-      {
-        label: "MathJS helpers",
-        actions: [
-          toolbarAction("MathJS - Evaluate Expression (Ctrl+E)", "mathjs-evaluate", "bi-gear"),
-          toolbarAction("MathJS - Simplify Expression (Ctrl+M)", "mathjs-simplify", "bi-gear", {
-            overlayIcon: "bi-lightning-charge",
-          }),
-          toolbarAction("MathJS - Convert to TeX (Ctrl+O)", "mathjs-tex", "bi-gear", {
-            overlayText: "TeX",
-          }),
         ],
       },
     ],
@@ -210,21 +197,27 @@ const TOOLBAR_CATEGORIES = [
         actions: [
           toolbarAction("Single Choice Quiz", "quiz-single-choice", "bi-x-circle", {
             overlayIcon: "bi-question-lg",
+            reverseCompositeRoles: true,
           }),
           toolbarAction("Multiple Choice Quiz", "quiz-multiple-choice", "bi-x-square", {
             overlayIcon: "bi-question-lg",
+            reverseCompositeRoles: true,
           }),
           toolbarAction("Text Input Quiz", "quiz-input", "bi-input-cursor-text", {
             overlayIcon: "bi-question-lg",
+            reverseCompositeRoles: true,
           }),
           toolbarAction("Selection Quiz", "quiz-selection", "bi-option", {
             overlayIcon: "bi-question-lg",
+            reverseCompositeRoles: true,
           }),
           toolbarAction("Matrix Quiz", "quiz-matrix", "bi-grid-3x3-gap", {
             overlayIcon: "bi-question-lg",
+            reverseCompositeRoles: true,
           }),
           toolbarAction("Gap Text", "quiz-gap-text", "bi-body-text", {
             overlayIcon: "bi-question-lg",
+            reverseCompositeRoles: true,
           }),
         ],
       },
@@ -323,6 +316,71 @@ export default {
   },
 
   methods: {
+    actionColumns(actions) {
+      const columns = [];
+      let currentColumn = [];
+      let currentUnits = 0;
+
+      for (const action of actions) {
+        const units = this.actionColumnUnits(action);
+
+        if (currentColumn.length > 0 && currentUnits + units > 3) {
+          columns.push(currentColumn);
+          currentColumn = [];
+          currentUnits = 0;
+        }
+
+        currentColumn.push(action);
+        currentUnits += units;
+      }
+
+      if (currentColumn.length > 0) {
+        columns.push(currentColumn);
+      }
+
+      return columns;
+    },
+
+    actionHasSquareButton(action) {
+      return this.actionHasCompositeIcon(action);
+    },
+
+    actionHasCompositeIcon(action) {
+      return Boolean(action.overlayIcon || action.overlayText);
+    },
+
+    actionPrimaryIconClass(action) {
+      if (action.reverseCompositeRoles) {
+        return action.icon;
+      }
+
+      return action.overlayIcon;
+    },
+
+    actionPrimaryText(action) {
+      if (action.reverseCompositeRoles) {
+        return "";
+      }
+
+      return action.overlayText;
+    },
+
+    actionIndexIconClass(action) {
+      if (action.reverseCompositeRoles) {
+        return action.overlayIcon;
+      }
+
+      return action.icon;
+    },
+
+    actionColumnUnits(action) {
+      return this.actionHasSquareButton(action) ? 1.5 : 1;
+    },
+
+    actionLabel(action) {
+      return action.title;
+    },
+
     triggerToolbarAction(action) {
       if (action.recorder) {
         this.recorder[action.recorder] = true;
@@ -1599,65 +1657,6 @@ I (study) ~[[ am going to study ]]~ harder this term.
         },
       });
 
-      Editor.addAction({
-        // An unique identifier of the contributed action.
-        id: "mathjs-evaluate",
-        // A label of the action that will be presented to the user.
-        label: "MathJS - Evaluate Expression",
-        // An optional array of keybindings for the action.
-        keybindings: [KeyMod.CtrlCmd | KeyCode.KeyE],
-        // A precondition for this action.
-        precondition: undefined,
-        // A rule to evaluate on top of the precondition in order to dispatch the keybindings.
-        keybindingContext: undefined,
-        contextMenuGroupId: "1_modifications",
-        contextMenuOrder: 1.5,
-        // Method that will be executed when the action is triggered.
-        // @param editor The editor instance is passed in as a convenience
-        run: function (text: any) {
-          self.make("mathjs-evaluate");
-        },
-      });
-      Editor.addAction({
-        // An unique identifier of the contributed action.
-        id: "mathjs-simplify",
-        // A label of the action that will be presented to the user.
-        label: "MathJS - Simplify Expression",
-        // An optional array of keybindings for the action.
-        keybindings: [KeyMod.CtrlCmd | KeyCode.KeyM],
-        // A precondition for this action.
-        precondition: undefined,
-        // A rule to evaluate on top of the precondition in order to dispatch the keybindings.
-        keybindingContext: undefined,
-        contextMenuGroupId: "1_modifications",
-        contextMenuOrder: 1.6,
-        // Method that will be executed when the action is triggered.
-        // @param editor The editor instance is passed in as a convenience
-        run: function (text: any) {
-          self.make("mathjs-simplify");
-        },
-      });
-
-      Editor.addAction({
-        // An unique identifier of the contributed action.
-        id: "mathjs-tex",
-        // A label of the action that will be presented to the user.
-        label: "MathJS - to Tex",
-        // An optional array of keybindings for the action.
-        keybindings: [KeyMod.CtrlCmd | KeyCode.KeyO],
-        // A precondition for this action.
-        precondition: undefined,
-        // A rule to evaluate on top of the precondition in order to dispatch the keybindings.
-        keybindingContext: undefined,
-        contextMenuGroupId: "1_modifications",
-        contextMenuOrder: 1.7,
-        // Method that will be executed when the action is triggered.
-        // @param editor The editor instance is passed in as a convenience
-        run: function (text: any) {
-          self.make("mathjs-tex");
-        },
-      });
-
       const snippetProvider = languages.registerCompletionItemProvider("markdown", {
         //triggerCharacters: ['['],
 
@@ -2061,27 +2060,62 @@ I (study) ~[[ am going to study ]]~ harder this term.
           :aria-label="`${activeToolbarConfig.label} toolbar`"
         >
           <div
-            v-for="group in activeToolbarConfig.groups"
+            v-for="(group, groupIndex) in activeToolbarConfig.groups"
             :key="`${activeToolbarConfig.id}-${group.label}`"
-            class="btn-group"
+            class="editor-toolbar-section"
+            :class="{ 'editor-toolbar-section--separated': groupIndex > 0 }"
             role="group"
             :aria-label="group.label"
           >
-            <button
-              v-for="action in group.actions"
-              :key="`${group.label}-${action.title}`"
-              class="btn btn-sm btn-outline-secondary"
-              type="button"
-              :title="action.title"
-              @click="triggerToolbarAction(action)"
+            <div
+              v-for="(column, columnIndex) in actionColumns(group.actions)"
+              :key="`${group.label}-column-${columnIndex}`"
+              class="editor-toolbar-column"
             >
-              <i :class="['bi', action.icon]"></i>
-              <i
-                v-if="action.overlayIcon"
-                :class="['bi', action.overlayIcon, 'icon-overlay']"
-              ></i>
-              <i v-else-if="action.overlayText" class="bi icon-overlay">{{ action.overlayText }}</i>
-            </button>
+              <div
+                v-for="action in column"
+                :key="`${group.label}-${action.title}`"
+                class="editor-toolbar-action-row"
+              >
+                <button
+                  class="btn btn-sm btn-outline-secondary editor-toolbar-action"
+                  :class="{ 'editor-toolbar-action--square': actionHasSquareButton(action) }"
+                  type="button"
+                  :title="action.title"
+                  @click="triggerToolbarAction(action)"
+                >
+                  <span
+                    :class="[
+                      'editor-toolbar-action__icon',
+                      { 'editor-toolbar-action__icon--composite': actionHasCompositeIcon(action) },
+                    ]"
+                  >
+                    <template v-if="actionHasCompositeIcon(action)">
+                      <i
+                        v-if="actionPrimaryIconClass(action)"
+                        :class="['bi', actionPrimaryIconClass(action), 'icon-primary']"
+                      ></i>
+                      <span v-else-if="actionPrimaryText(action)" class="icon-primary icon-text">
+                        {{ actionPrimaryText(action) }}
+                      </span>
+                    </template>
+                    <i
+                      v-if="actionIndexIconClass(action)"
+                      :class="[
+                        'bi',
+                        actionIndexIconClass(action),
+                        { 'icon-index': actionHasCompositeIcon(action) },
+                      ]"
+                    ></i>
+                    <i
+                      v-else-if="action.overlayIcon"
+                      :class="['bi', action.overlayIcon]"
+                    ></i>
+                  </span>
+                </button>
+                <span class="editor-toolbar-action__label">{{ actionLabel(action) }}</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -2090,24 +2124,34 @@ I (study) ~[[ am going to study ]]~ harder this term.
         <input type="file" id="movieInput" style="display: none" accept="video/*" />
 
         <div class="btn-toolbar editor-zoom-toolbar" role="toolbar" aria-label="Editor zoom toolbar">
-          <div class="btn-group" role="group" aria-label="Editor font zoom">
+          <div
+            class="editor-toolbar-group editor-toolbar-group--zoom"
+            role="group"
+            aria-label="Editor font zoom"
+          >
             <button
-              class="btn btn-sm btn-outline-secondary"
+              class="btn btn-sm btn-outline-secondary editor-toolbar-action"
               type="button"
               title="Editor Font Zoom In"
               @click="zoomIn()"
             >
-              <i class="bi bi-plus-lg"></i>
+              <span class="editor-toolbar-action__icon">
+                <i class="bi bi-plus-lg"></i>
+              </span>
             </button>
 
             <button
-              class="btn btn-sm btn-outline-secondary"
+              class="btn btn-sm btn-outline-secondary editor-toolbar-action"
               type="button"
               title="Editor Font Zoom Out"
               @click="zoomOut()"
             >
-              <i class="bi bi-dash-lg"></i>
+              <span class="editor-toolbar-action__icon">
+                <i class="bi bi-dash-lg"></i>
+              </span>
             </button>
+
+            <span class="editor-toolbar-action__label">Editor Font Zoom</span>
           </div>
         </div>
       </nav>
@@ -2222,12 +2266,46 @@ I (study) ~[[ am going to study ]]~ harder this term.
   padding: 0.5rem 0.8rem 0.35rem 0.8rem;
 }
 
-.btn-group {
-  margin: 0.1rem 0.3rem 0.1rem 0.2rem;
+.editor-toolbar-group {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
+  margin: 0.12rem 0;
+}
+
+.editor-toolbar-group--zoom {
+  flex-direction: row;
+  align-items: center;
+}
+
+.editor-toolbar-section {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+
+.editor-toolbar-section--separated {
+  border-left: 1px solid rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.95);
+  padding-left: 0.9rem;
+  margin-left: 0.2rem;
+}
+
+.editor-toolbar-column {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+
+.editor-toolbar-action-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
 }
 
 .editor-toolbar .btn-outline-secondary,
-.editor-toolbar .btn-group > .btn {
+.editor-toolbar .editor-toolbar-group > .btn {
   border-width: 2px;
 }
 
@@ -2237,6 +2315,83 @@ I (study) ~[[ am going to study ]]~ harder this term.
   justify-content: center;
   min-width: 2.8rem;
   min-height: 2.5rem;
+  border-radius: 0.7rem;
+}
+
+.editor-toolbar-action {
+  white-space: nowrap;
+}
+
+.editor-toolbar-action--square {
+  min-width: 2.25rem !important;
+  width: 2.25rem !important;
+  min-height: 2.25rem !important;
+  height: 2.25rem !important;
+  max-width: 2.25rem !important;
+  max-height: 2.25rem !important;
+  aspect-ratio: 1 / 1;
+  flex: 0 0 2.25rem;
+  padding: 0.24rem !important;
+}
+
+.editor-toolbar-action__icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  min-width: 1rem;
+  height: 1rem;
+  line-height: 1;
+}
+
+.editor-toolbar-action__icon > .bi,
+.editor-toolbar-action__icon > .icon-text {
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+.editor-toolbar-action__icon--composite {
+  width: 1.35rem;
+  min-width: 1.35rem;
+  height: 1.35rem;
+}
+
+.editor-toolbar-action__icon--composite > .icon-primary {
+  font-size: 0.9rem;
+}
+
+.editor-toolbar-action__icon--composite > .icon-text {
+  font-style: normal;
+  font-weight: 700;
+}
+
+.editor-toolbar-action__icon--composite > .icon-index {
+  position: absolute;
+  right: -0.24rem;
+  bottom: -0.17rem;
+  font-size: 0.6075rem;
+}
+
+.editor-toolbar-action--square .editor-toolbar-action__icon {
+  width: 1.2rem;
+  min-width: 1.2rem;
+  height: 1.2rem;
+}
+
+.editor-toolbar-action--square .editor-toolbar-action__icon--composite {
+  width: 1.28rem;
+  min-width: 1.28rem;
+  height: 1.28rem;
+}
+
+.editor-toolbar-action__label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: left;
+  color: var(--bs-body-color);
+  white-space: normal;
 }
 
 .editor-toolbar .btn > .bi,
@@ -2262,8 +2417,20 @@ I (study) ~[[ am going to study ]]~ harder this term.
     padding: 0.2rem 0.45rem 0.1rem 0.35rem;
   }
 
-  .btn-group {
-    margin: 0.1rem 0.3rem 0.1rem 0.2rem;
+  .editor-toolbar-group {
+    gap: 0.25rem;
+  }
+
+  .editor-toolbar-section {
+    gap: 0.35rem;
+  }
+
+  .editor-toolbar-action-row {
+    gap: 0.35rem;
+  }
+
+  .editor-toolbar-action__label {
+    font-size: 0.64rem;
   }
 }
 
@@ -2300,7 +2467,7 @@ I (study) ~[[ am going to study ]]~ harder this term.
 
 .editor-category-group .btn {
   min-width: auto;
-  min-height: 2.75rem;
+  min-height: 1.925rem;
   font-size: 0.95rem;
   font-weight: 700;
   border-top-left-radius: 1.15rem;
@@ -2308,13 +2475,12 @@ I (study) ~[[ am going to study ]]~ harder this term.
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
   position: relative;
-  top: 0;
   transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease,
     background-color 0.12s ease;
   border-width: 2px;
-  padding-inline: 1.3rem;
-  padding-top: 0.6rem !important;
-  padding-bottom: 0.72rem !important;
+  padding-inline: 1rem;
+  padding-top: 0.42rem !important;
+  padding-bottom: 0.5rem !important;
   background-color: rgba(255, 255, 255, 0.02);
   color: var(--liveeditor-accent-color, #147375);
   box-shadow: inset 0 0 0 1px rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.12);
@@ -2323,10 +2489,10 @@ I (study) ~[[ am going to study ]]~ harder this term.
 
 .editor-category-group .btn.btn-primary,
 .editor-category-group .btn.btn-outline-secondary {
-  min-height: 2.75rem !important;
+  min-height: 1.925rem !important;
   height: auto !important;
-  padding-top: 0.6rem !important;
-  padding-bottom: 0.72rem !important;
+  padding-top: 0.42rem !important;
+  padding-bottom: 0.5rem !important;
 }
 
 .editor-category-group .btn.btn-outline-secondary {
@@ -2380,12 +2546,47 @@ I (study) ~[[ am going to study ]]~ harder this term.
 .editor-main-toolbar {
   position: relative;
   z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.65rem;
   margin-top: -4px;
-  padding: 0.42rem 0.5rem 0.22rem 0.5rem;
+  padding: 0.55rem 0.7rem 0.45rem 0.7rem;
   border: 2px solid var(--liveeditor-accent-color, #147375);
   border-radius: 1rem 1rem 0 0;
   background-color: var(--editor-toolbar-bg);
   box-shadow: 0 0.2rem 0.75rem rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.1);
+}
+
+.editor-main-toolbar .btn,
+.editor-zoom-toolbar .btn {
+  min-width: 6.4rem;
+  min-height: 1.45rem;
+  padding: 0.2rem 0.45rem 0.15rem 0.45rem;
+}
+
+.editor-main-toolbar .btn.editor-toolbar-action--square {
+  min-width: 2.25rem !important;
+  width: 2.25rem !important;
+  min-height: 2.25rem !important;
+  height: 2.25rem !important;
+  max-width: 2.25rem !important;
+  max-height: 2.25rem !important;
+  aspect-ratio: 1 / 1;
+  flex: 0 0 2.25rem;
+  padding: 0.24rem !important;
+}
+
+.editor-main-toolbar .btn > .bi,
+.editor-main-toolbar .btn > i:not(.icon-overlay),
+.editor-zoom-toolbar .btn > .bi,
+.editor-zoom-toolbar .btn > i:not(.icon-overlay) {
+  font-size: 0.875rem;
+}
+
+.editor-main-toolbar .btn > .icon-overlay,
+.editor-zoom-toolbar .btn > .icon-overlay {
+  font-size: 0.475rem !important;
 }
 
 .editor-toolbar.navbar-dark .editor-main-toolbar {
@@ -2394,6 +2595,9 @@ I (study) ~[[ am going to study ]]~ harder this term.
 }
 
 .editor-zoom-toolbar {
+  display: flex;
+  align-items: center;
+  padding: 0.55rem 0.7rem 0.25rem 0.7rem;
   border-top: 1px solid var(--bs-border-color);
 }
 

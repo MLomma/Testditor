@@ -34,6 +34,14 @@ export default {
       return (this.ui && this.ui[key]) || fallback;
     },
 
+    lowercaseFirst(text: string) {
+      if (!text) {
+        return text;
+      }
+
+      return text.charAt(0).toLowerCase() + text.slice(1);
+    },
+
     isInline() {
       return this.variant === "inline";
     },
@@ -47,11 +55,7 @@ export default {
         return this.text("linkLabel", "Link");
       }
 
-      if (index === 1) {
-        return this.text("secondLinkLabel", "Second Link");
-      }
-
-      return `${this.text("linkLabel", "Link")} ${index + 1}`;
+      return `${index + 1}. ${this.text("linkLabel", "Link")}`;
     },
 
     linkId(index: number) {
@@ -63,10 +67,6 @@ export default {
     },
 
     visibleLinks() {
-      if (!this.isInline()) {
-        return this.links;
-      }
-
       return this.links.slice(0, 1);
     },
 
@@ -74,17 +74,15 @@ export default {
       return this.links.slice(1);
     },
 
-    optionalMergeLinkPlaceholder(index: number) {
-      return `${this.text("optionalMergeLinkPrefix", "Optional merge link")} ${index + 1}`;
+    optionalMergeLinkPlaceholder(linkNumber: number) {
+      return `${linkNumber}. ${this.lowercaseFirst(
+        this.text("optionalMergeLinkPrefix", "Optional merge link")
+      )}`;
     },
 
     submit() {
       const author = this.author.trim();
       const links = this.links.map((link) => link.trim());
-
-      if (!author) {
-        return;
-      }
 
       this.$emit("create", {
         author,
@@ -185,7 +183,6 @@ export default {
         v-if="isInline()"
         type="button"
         class="btn btn-primary px-4 new-course-submit-button"
-        :disabled="author.trim().length === 0"
         @click="submit"
       >
         <span class="new-course-submit-button__label">{{ text('create', 'Create') }}</span>
@@ -196,7 +193,6 @@ export default {
       <button
         type="button"
         class="btn btn-primary px-4 new-course-submit-button"
-        :disabled="author.trim().length === 0"
         @click="submit"
       >
         <span class="new-course-submit-button__label">{{ text('createNewCourseButton', 'Create new course') }}</span>

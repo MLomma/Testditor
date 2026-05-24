@@ -208,9 +208,10 @@
 
       body {
         width: 100%;
-        height: 100vh;
-        overflow-y: hidden;
-        position: fixed;
+        min-height: 100vh;
+        overflow-x: auto;
+        overflow-y: auto;
+        position: relative;
         margin-top: 0px;
         top: 0 !important;
       }
@@ -221,7 +222,7 @@
 
       #app {
         width: 100%;
-        height: 100%;
+        min-height: 100vh;
       }
 
       #editor-toolbar-host {
@@ -277,6 +278,53 @@
         --bs-btn-active-bg: var(--liveeditor-accent-color);
         --bs-btn-active-border-color: var(--liveeditor-accent-color);
         --bs-btn-active-color: #fff;
+      }
+
+      .editor-category-group .btn {
+        min-height: 1.925rem !important;
+        padding-inline: 1rem !important;
+        padding-top: 0.42rem !important;
+        padding-bottom: 0.5rem !important;
+      }
+
+      .editor-category-group .btn.btn-primary,
+      .editor-category-group .btn.btn-outline-secondary {
+        min-height: 1.925rem !important;
+        height: auto !important;
+        padding-top: 0.125rem !important;
+        padding-bottom: 0.1875rem !important;
+      }
+
+      .editor-main-toolbar .btn,
+      .editor-zoom-toolbar .btn {
+        min-width: 1.4rem !important;
+        min-height: 1.25rem !important;
+        height: 1.25rem !important;
+        padding: 0.2rem 0.4rem 0.15rem 0.4rem !important;
+      }
+
+      .editor-main-toolbar .btn.editor-toolbar-action--square {
+        min-width: 2.25rem !important;
+        width: 2.25rem !important;
+        min-height: 2.25rem !important;
+        height: 2.25rem !important;
+        max-width: 2.25rem !important;
+        max-height: 2.25rem !important;
+        aspect-ratio: 1 / 1;
+        flex: 0 0 2.25rem;
+        padding: 0.24rem !important;
+      }
+
+      .editor-main-toolbar .btn > .bi,
+      .editor-main-toolbar .btn > i:not(.icon-overlay),
+      .editor-zoom-toolbar .btn > .bi,
+      .editor-zoom-toolbar .btn > i:not(.icon-overlay) {
+        font-size: 0.875rem !important;
+      }
+
+      .editor-main-toolbar .btn > .icon-overlay,
+      .editor-zoom-toolbar .btn > .icon-overlay {
+        font-size: 0.475rem !important;
       }
 
       .card {
