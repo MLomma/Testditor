@@ -110,6 +110,14 @@ export default {
       return this.lights ? "bi bi-sun" : "bi bi-moon";
     },
 
+    displayedCourses() {
+      if (this.searchText.length > 0 || this.coursesFiltered.length > 0) {
+        return this.coursesFiltered;
+      }
+
+      return this.courses;
+    },
+
     overviewUi() {
       return getOverviewUi(this.translationLanguage);
     },
@@ -208,6 +216,14 @@ export default {
 
     newCourse() {
       this.showNewCourseModal = true;
+    },
+
+    quickCreateCourse() {
+      this.createNewCourse({
+        author: "",
+        language: Utils.getSuggestedCourseLanguage(),
+        links: [],
+      });
     },
 
     showNewFunctions() {
@@ -591,28 +607,27 @@ export default {
     </div>
 
     <div
-      class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-8 m-4"
-      v-if="searchText.length > 0 || coursesFiltered.length > 0"
+      class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-8 m-4 overview-card-grid"
+      :class="{ 'overview-card-grid--empty': displayedCourses.length === 0 }"
+      @click.self="quickCreateCourse"
     >
-      <Card
-        v-for="item of coursesFiltered"
-        :key="item.id"
-        :card-id="item.id"
-        :card-timestamp="item.timestamp"
-        :card-title="item.meta.title"
-        :card-logo="item.meta.logo"
-        :card-version="item.meta.version"
-        :card-comment="item.meta.macro?.comment"
-        :card-gist="item.meta.gist_url"
-        :card-tags="item.meta.macro?.tags"
-        :ui="overviewUi"
-        @drop="drop"
-      />
-    </div>
+      <button
+        v-if="displayedCourses.length === 0"
+        type="button"
+        class="col-12 p-2 overview-card-grid__empty-action"
+        @click="quickCreateCourse"
+      >
+        <span class="overview-card-grid__empty-card shadow-sm">
+          <span class="overview-card-grid__empty-icon">+</span>
+          <span class="overview-card-grid__empty-title">{{ overviewUi.newCourse }}</span>
+          <span class="overview-card-grid__empty-copy">
+            {{ overviewUi.newCourseCardDescription || 'Click here to open a new course and start writing.' }}
+          </span>
+        </span>
+      </button>
 
-    <div class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-8 m-4" v-else>
       <Card
-        v-for="item of courses"
+        v-for="item of displayedCourses"
         :key="item.id"
         :card-id="item.id"
         :card-timestamp="item.timestamp"
@@ -625,6 +640,18 @@ export default {
         :ui="overviewUi"
         @drop="drop"
       />
+
+      <button
+        v-if="displayedCourses.length > 0"
+        type="button"
+        class="col-12 p-2 col-sm-6 col-md-6 col-lg-4 col-xl-3 overview-card-grid__add-tile"
+        @click="quickCreateCourse"
+      >
+        <span class="overview-card-grid__add-card">
+          <span class="overview-card-grid__add-icon">+</span>
+          <span class="overview-card-grid__add-label">{{ overviewUi.newCourse }}</span>
+        </span>
+      </button>
     </div>
 
     <Footer :social-label="overviewUi.followUsOn">
@@ -740,5 +767,77 @@ export default {
   min-width: 2rem;
   font-weight: 700;
   color: var(--liveeditor-accent-color, #147375);
+}
+
+.overview-card-grid {
+  min-height: 12rem;
+  align-content: start;
+}
+
+.overview-card-grid--empty {
+  min-height: 18rem;
+}
+
+.overview-card-grid__empty-action,
+.overview-card-grid__add-tile {
+  border: 0;
+  background: transparent;
+  text-align: inherit;
+}
+
+.overview-card-grid__empty-card,
+.overview-card-grid__add-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 12rem;
+  padding: 1.5rem;
+  border: 2px dashed rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.55);
+  border-radius: 1rem;
+  background: rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.08);
+  color: inherit;
+  transition: transform 0.15s ease, border-color 0.15s ease, background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.overview-card-grid__empty-action:hover .overview-card-grid__empty-card,
+.overview-card-grid__empty-action:focus-visible .overview-card-grid__empty-card,
+.overview-card-grid__add-tile:hover .overview-card-grid__add-card,
+.overview-card-grid__add-tile:focus-visible .overview-card-grid__add-card {
+  border-color: var(--liveeditor-accent-color, #147375);
+  background: rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.14);
+  box-shadow: 0 0.75rem 1.5rem rgba(var(--liveeditor-accent-rgb, 20, 115, 117), 0.14);
+  transform: translateY(-2px);
+  outline: none;
+}
+
+.overview-card-grid__empty-icon,
+.overview-card-grid__add-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 999px;
+  background: var(--liveeditor-accent-color, #147375);
+  color: white;
+  font-size: 2rem;
+  line-height: 1;
+  margin-bottom: 1rem;
+}
+
+.overview-card-grid__empty-title,
+.overview-card-grid__add-label {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.overview-card-grid__empty-copy {
+  max-width: 26rem;
+  margin-top: 0.65rem;
+  text-align: center;
+  opacity: 0.82;
 }
 </style>

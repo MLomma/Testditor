@@ -13,6 +13,7 @@ var previewPointerDragState = null;
 var previewBlockDragState = null;
 var previewReorderObserver = null;
 var previewBlockOutlineStyleId = 'lia-preview-block-outline-style';
+var previewBlockDragEdgeThreshold = 16;
 
 window.normalizePreviewSource = function (src) {
   if (!src) {
@@ -40,11 +41,14 @@ window.ensurePreviewBlockOutlineStyle = function () {
     '  border-radius: 0.9rem;',
     '  padding: 1rem 1.1rem;',
     '  margin-block: 1rem;',
+    '  cursor: auto;',
+    '}',
+    'main > .lia-preview-block[data-lia-block-drag-hover="true"] {',
     '  cursor: grab;',
     '}',
     'main > .lia-preview-block[data-lia-block-dragging="true"] {',
-    '  cursor: grabbing;',
     '  opacity: 0.72;',
+    '  cursor: grabbing;',
     '}',
     'main > .lia-preview-block[data-lia-block-drop="before"]::before,',
     'main > .lia-preview-block[data-lia-block-drop="after"]::after {',
@@ -73,7 +77,7 @@ window.ensurePreviewBlockOutlineStyle = function () {
     'main > .lia-preview-block > :last-child {',
     '  margin-bottom: 0;',
     '}',
-  ].join('\n')
+  ].join('\\n')
 
   document.head.appendChild(style)
 }
@@ -101,8 +105,14 @@ window.decoratePreviewBlocks = function () {
       continue
     }
 
+    const staleHandle = block.querySelector(':scope > .lia-preview-block__drag-handle')
+    if (staleHandle) {
+      staleHandle.remove()
+    }
+
     block.classList.add('lia-preview-block')
     block.dataset.liaBlockIndex = String(blockIndex)
+
     blockIndex += 1
   }
 }
@@ -124,6 +134,12 @@ window.clearPreviewBlockDragState = function () {
     blocks[i].removeAttribute('data-lia-block-dragging')
   }
 
+  const hoverBlocks = document.querySelectorAll('.lia-preview-block[data-lia-block-drag-hover]')
+
+  for (let i = 0; i < hoverBlocks.length; i++) {
+    hoverBlocks[i].removeAttribute('data-lia-block-drag-hover')
+  }
+
   window.clearPreviewBlockDropPreview()
 }
 
@@ -135,6 +151,27 @@ window.findPreviewBlockTarget = function (node) {
   const candidate = node.closest('.lia-preview-block')
 
   return candidate && candidate.closest('main') ? candidate : null
+}
+
+window.isPreviewBlockDragEdge = function (elem, clientX, clientY) {
+  if (!elem || typeof clientX !== 'number' || typeof clientY !== 'number') {
+    return false
+  }
+
+  const rect = elem.getBoundingClientRect()
+  const offsetX = clientX - rect.left
+  const offsetY = clientY - rect.top
+
+  if (offsetX < 0 || offsetY < 0 || offsetX > rect.width || offsetY > rect.height) {
+    return false
+  }
+
+  return (
+    offsetX <= previewBlockDragEdgeThreshold ||
+    offsetX >= rect.width - previewBlockDragEdgeThreshold ||
+    offsetY <= previewBlockDragEdgeThreshold ||
+    offsetY >= rect.height - previewBlockDragEdgeThreshold
+  )
 }
 
 window.installPreviewBlockReorderHandlers = function () {
@@ -150,17 +187,61 @@ window.bindPreviewBlockReorder = function (elem) {
     return
   }
 
-  elem.draggable = true
+  const armDrag = function (event) {
+    const enabled = window.isPreviewBlockDragEdge(elem, event.clientX, event.clientY)
+    elem.draggable = enabled
+
+    if (enabled) {
+      elem.dataset.liaBlockDragArmed = 'true'
+    } else {
+      elem.removeAttribute('data-lia-block-drag-armed')
+    }
+  }
+
+  const updateHoverState = function (event) {
+    if (window.isPreviewBlockDragEdge(elem, event.clientX, event.clientY)) {
+      elem.dataset.liaBlockDragHover = 'true'
+    } else {
+      elem.removeAttribute('data-lia-block-drag-hover')
+    }
+  }
+
+  elem.draggable = false
+
+  elem.addEventListener('pointermove', updateHoverState)
+  elem.addEventListener('mousemove', updateHoverState)
+  elem.addEventListener('pointerdown', armDrag)
+  elem.addEventListener('mousedown', armDrag)
+  elem.addEventListener('pointerleave', function () {
+    if (!elem.hasAttribute('data-lia-block-dragging')) {
+      elem.removeAttribute('data-lia-block-drag-hover')
+    }
+  })
+  elem.addEventListener('mouseleave', function () {
+    if (!elem.hasAttribute('data-lia-block-dragging')) {
+      elem.removeAttribute('data-lia-block-drag-hover')
+    }
+  })
+
+  elem.addEventListener('pointerup', function () {
+    if (!elem.hasAttribute('data-lia-block-dragging')) {
+      elem.draggable = false
+      elem.removeAttribute('data-lia-block-drag-armed')
+    }
+  })
+
+  elem.addEventListener('pointercancel', function () {
+    if (!elem.hasAttribute('data-lia-block-dragging')) {
+      elem.draggable = false
+      elem.removeAttribute('data-lia-block-drag-armed')
+    }
+  })
 
   elem.addEventListener('dragstart', function (event) {
-    const interactiveTarget =
-      event.target && event.target.closest
-        ? event.target.closest('input, textarea, select, button, a, label, summary, audio, video, img')
-        : null
-
-    if (interactiveTarget) {
+    if (elem.dataset.liaBlockDragArmed !== 'true') {
       event.preventDefault()
       window.clearPreviewBlockDragState()
+      elem.draggable = false
       return
     }
 
@@ -246,6 +327,8 @@ window.bindPreviewBlockReorder = function (elem) {
 
   elem.addEventListener('dragend', function () {
     window.clearPreviewBlockDragState()
+    elem.draggable = false
+    elem.removeAttribute('data-lia-block-drag-armed')
   })
 
   if (elem.dataset) {
@@ -297,9 +380,10 @@ window.getPreviewMediaContainer = function (elem) {
     if (wrapper) {
       return wrapper
     }
-}
+  }
 
   return elem
+}
 
 window.postPreviewReorder = function (target, clientY) {
   if (!previewDragState || !target || !target.dataset.liaSource) {
@@ -675,7 +759,7 @@ window.enablePreviewBlockReorder()
 export default {
   name: "Preview",
 
-  emits: ["ready", "update", "goto", "reorder"],
+  emits: ["ready", "update", "goto", "reorder", "editText"],
 
   props: {
     fetchError: Function,
@@ -725,6 +809,7 @@ export default {
       isReady: false,
       // @ts-ignore
       previewBlockPointerDragState: null,
+      pendingPreviewBlockFocus: false,
       responsiveVoiceKey: process.env.RESPONSIVEVOICE_KEY,
       previewBlockObserver: null,
       sendToLia: null,
@@ -759,12 +844,44 @@ export default {
         "  border-radius: 0.9rem;",
         "  padding: 1rem 1.1rem;",
         "  margin-block: 1rem;",
-        "  cursor: grab;",
+        "  cursor: auto;",
         "  transition: border-color 120ms ease, box-shadow 120ms ease, opacity 120ms ease;",
         "}",
+        "main > .lia-preview-block[data-lia-block-drag-hover='true'] {",
+        "  cursor: grab;",
+        "}",
+        "main > .lia-preview-block [data-lia-preview-editable='true'] {",
+        "  cursor: text;",
+        "  user-select: text;",
+        "  -webkit-user-select: text;",
+        "  pointer-events: auto;",
+        "  caret-color: currentColor;",
+        "  white-space: pre-wrap;",
+        "}",
+        "main > .lia-preview-block [data-lia-preview-editable='true']:focus {",
+        "  outline: 1px solid rgba(255, 255, 255, 0.25);",
+        "  outline-offset: 0.15rem;",
+        "}",
         "main > .lia-preview-block[data-lia-block-dragging='true'] {",
-        "  cursor: grabbing;",
         "  opacity: 0.72;",
+        "  cursor: grabbing;",
+        "}",
+        "main > .lia-preview-block[data-lia-preview-block-editor-open='true'] {",
+        "  cursor: text;",
+        "}",
+        "main > .lia-preview-block > .lia-preview-block__editor {",
+        "  display: block;",
+        "  width: 100%;",
+        "  min-height: 3.5rem;",
+        "  border: 1px solid rgba(255, 255, 255, 0.28);",
+        "  border-radius: 0.6rem;",
+        "  background: rgba(0, 0, 0, 0.16);",
+        "  color: inherit;",
+        "  font: inherit;",
+        "  line-height: inherit;",
+        "  padding: 0.65rem 0.8rem;",
+        "  resize: vertical;",
+        "  outline: none;",
         "}",
         "main > .lia-preview-block[data-lia-block-drop='before']::before,",
         "main > .lia-preview-block[data-lia-block-drop='after']::after {",
@@ -793,7 +910,185 @@ export default {
         "main > .lia-preview-block > :last-child {",
         "  margin-bottom: 0;",
         "}",
+        "main > .lia-preview-insert-zone {",
+        "  display: flex;",
+        "  width: 100%;",
+        "  align-items: center;",
+        "  justify-content: center;",
+        "  gap: 0.65rem;",
+        "  min-height: 4.5rem;",
+        "  margin: 1rem 0;",
+        "  border: 2px dashed rgba(" + accentRgb + ", 0.45);",
+        "  border-radius: 0.95rem;",
+        "  background: rgba(" + accentRgb + ", 0.08);",
+        "  color: inherit;",
+        "  cursor: pointer;",
+        "  transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;",
+        "}",
+        "main > .lia-preview-insert-zone:hover,",
+        "main > .lia-preview-insert-zone:focus-visible {",
+        "  border-color: " + accentColor + ";",
+        "  background: rgba(" + accentRgb + ", 0.15);",
+        "  transform: translateY(-1px);",
+        "  outline: none;",
+        "}",
+        "main > .lia-preview-insert-zone--empty {",
+        "  min-height: 8rem;",
+        "  margin-top: 1.25rem;",
+        "  flex-direction: column;",
+        "}",
+        "main > .lia-preview-insert-zone__icon {",
+        "  font-size: 1.65rem;",
+        "  font-weight: 700;",
+        "  line-height: 1;",
+        "}",
+        "main > .lia-preview-insert-zone__label {",
+        "  font-weight: 600;",
+        "}",
       ].join("\n");
+    },
+
+    requestPreviewBlockCreation(previewDocument: Document) {
+      const createPreviewBlock = this.findPreviewParentMethod("createPreviewBlock");
+
+      if (!createPreviewBlock) {
+        return false;
+      }
+
+      const headingText = (previewDocument.querySelector("main > header")?.textContent || "").trim();
+
+      if (!headingText) {
+        return false;
+      }
+
+      this.pendingPreviewBlockFocus = true;
+
+      const changed = Boolean(createPreviewBlock({ headingText }));
+
+      if (!changed) {
+        this.pendingPreviewBlockFocus = false;
+      }
+
+      return changed;
+    },
+
+    focusPendingPreviewBlock(previewDocument: Document, main: HTMLElement) {
+      if (!this.pendingPreviewBlockFocus) {
+        return;
+      }
+
+      const blocks = Array.from(main.querySelectorAll(":scope > .lia-preview-block")) as HTMLElement[];
+      const targetBlock = blocks[blocks.length - 1];
+
+      if (!targetBlock) {
+        return;
+      }
+
+      const editableTarget = this.getPreviewEditableTextTarget(targetBlock);
+
+      if (editableTarget) {
+        this.focusPreviewEditableTargetAt(editableTarget, previewDocument, true);
+        this.pendingPreviewBlockFocus = false;
+        return;
+      }
+
+      if (this.shouldUsePreviewBlockSourceEditor(targetBlock)) {
+        this.openPreviewBlockSourceEditor(targetBlock, previewDocument);
+      }
+
+      this.pendingPreviewBlockFocus = false;
+    },
+
+    bindPreviewInsertZones(previewDocument: Document, main: HTMLElement) {
+      const syncZone = (
+        zone: HTMLButtonElement,
+        label: string,
+        empty: boolean,
+        kind: "empty" | "append"
+      ) => {
+        zone.type = "button";
+        zone.dataset.liaPreviewInsertZone = kind;
+        zone.className = empty
+          ? "lia-preview-insert-zone lia-preview-insert-zone--empty"
+          : "lia-preview-insert-zone";
+
+        const currentLabel = zone.querySelector(":scope > .lia-preview-insert-zone__label");
+        const currentIcon = zone.querySelector(":scope > .lia-preview-insert-zone__icon");
+
+        if (!(currentLabel instanceof previewDocument.defaultView!.HTMLElement) || !currentIcon) {
+          zone.innerHTML = `<span class="lia-preview-insert-zone__icon">+</span><span class="lia-preview-insert-zone__label">${label}</span>`;
+        } else if (currentLabel.textContent !== label) {
+          currentLabel.textContent = label;
+        }
+
+        if (zone.dataset.liaPreviewInsertBound !== "true") {
+          zone.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            this.requestPreviewBlockCreation(previewDocument);
+          });
+          zone.dataset.liaPreviewInsertBound = "true";
+        }
+
+        return zone;
+      };
+
+      const ensureZone = (
+        selector: string,
+        label: string,
+        empty: boolean,
+        kind: "empty" | "append"
+      ) => {
+        const existing = main.querySelector(selector) as HTMLButtonElement | null;
+
+        if (existing) {
+          return syncZone(existing, label, empty, kind);
+        }
+
+        const button = previewDocument.createElement("button");
+        return syncZone(button, label, empty, kind);
+      };
+
+      const blocks = Array.from(main.querySelectorAll(":scope > .lia-preview-block"));
+      const emptyZone = main.querySelector(
+        ':scope > .lia-preview-insert-zone[data-lia-preview-insert-zone="empty"]'
+      );
+      const appendZone = main.querySelector(
+        ':scope > .lia-preview-insert-zone[data-lia-preview-insert-zone="append"]'
+      );
+
+      if (blocks.length === 0) {
+        appendZone?.remove();
+        const emptyZoneButton = ensureZone(
+          ':scope > .lia-preview-insert-zone[data-lia-preview-insert-zone="empty"]',
+          "Click to start writing",
+          true,
+          "empty"
+        );
+        const header = main.querySelector(":scope > header");
+
+        if (header) {
+          if (emptyZoneButton.previousElementSibling !== header) {
+            header.insertAdjacentElement("afterend", emptyZoneButton);
+          }
+        } else if (main.firstElementChild !== emptyZoneButton) {
+          main.prepend(emptyZoneButton);
+        }
+
+        return;
+      }
+
+      emptyZone?.remove();
+      const appendZoneButton = ensureZone(
+        ':scope > .lia-preview-insert-zone[data-lia-preview-insert-zone="append"]',
+        "Click below to add a new block",
+        false,
+        "append"
+      );
+
+      if (main.lastElementChild !== appendZoneButton) {
+        main.appendChild(appendZoneButton);
+      }
     },
 
     getPreviewBlockTarget(node: EventTarget | null) {
@@ -802,6 +1097,1441 @@ export default {
       }
 
       return (node as Element).closest(".lia-preview-block") as HTMLElement | null;
+    },
+
+    parsePreviewFormattedBlockSource(sourceText: string | null) {
+      if (!sourceText || sourceText.includes("\n")) {
+        return null;
+      }
+
+      const wrappers = [
+        ["**", "**"],
+        ["__", "__"],
+        ["~~", "~~"],
+        ["*", "*"],
+        ["_", "_"],
+        ["`", "`"],
+      ] as const;
+
+      for (const [prefix, suffix] of wrappers) {
+        if (
+          sourceText.startsWith(prefix) &&
+          sourceText.endsWith(suffix) &&
+          sourceText.length > prefix.length + suffix.length
+        ) {
+          return {
+            prefix,
+            suffix,
+            text: sourceText.slice(prefix.length, sourceText.length - suffix.length),
+          };
+        }
+      }
+
+      return null;
+    },
+
+    getPreviewSimpleTextEditableTarget(node: HTMLElement) {
+      const allowedTags = new Set([
+        "SPAN",
+        "P",
+        "DIV",
+        "BLOCKQUOTE",
+        "A",
+        "STRONG",
+        "B",
+        "EM",
+        "I",
+        "U",
+        "S",
+        "DEL",
+        "MARK",
+        "CODE",
+        "KBD",
+        "SUB",
+        "SUP",
+        "SMALL",
+      ]);
+
+      let current = node;
+
+      while (current.children.length === 1) {
+        const child = current.children[0] as HTMLElement;
+
+        if (!allowedTags.has(child.tagName)) {
+          break;
+        }
+
+        current = child;
+      }
+
+      if (!(current.textContent || "").trim()) {
+        return null;
+      }
+
+      if (current === node && current.children.length === 0) {
+        const existingLeafTarget = current.querySelector(':scope > span[data-lia-preview-leaf-target="true"]') as HTMLElement | null;
+
+        if (existingLeafTarget) {
+          return existingLeafTarget;
+        }
+
+        const leafTarget = current.ownerDocument.createElement("span");
+        leafTarget.dataset.liaPreviewLeafTarget = "true";
+
+        while (current.firstChild) {
+          leafTarget.appendChild(current.firstChild);
+        }
+
+        current.appendChild(leafTarget);
+        return leafTarget;
+      }
+
+      return current;
+    },
+
+    getPreviewEditableTextTarget(node: HTMLElement, previewDocument?: Document) {
+      const visibleText = this.normalizePreviewEditableText(node.textContent || "");
+
+      if (!visibleText) {
+        return null;
+      }
+
+      if (
+        node.querySelector(
+          "img, audio, video, table, pre, input, textarea, select, button, svg, math, canvas, iframe, ul, ol, li, .lia-quiz"
+        )
+      ) {
+        return null;
+      }
+
+      const formattedSource = previewDocument
+        ? this.parsePreviewFormattedBlockSource(this.getPreviewBlockSourceText(node, previewDocument))
+        : null;
+
+      const simpleTextTarget = this.getPreviewSimpleTextEditableTarget(node);
+
+      if (!simpleTextTarget) {
+        return null;
+      }
+
+      if (formattedSource) {
+        simpleTextTarget.dataset.liaPreviewSourcePrefix = formattedSource.prefix;
+        simpleTextTarget.dataset.liaPreviewSourceSuffix = formattedSource.suffix;
+      } else {
+        delete simpleTextTarget.dataset.liaPreviewSourcePrefix;
+        delete simpleTextTarget.dataset.liaPreviewSourceSuffix;
+      }
+
+      return simpleTextTarget;
+    },
+
+    findPreviewParentMethod(methodName: string) {
+      let current: any = this.$parent;
+
+      while (current) {
+        if (typeof current[methodName] === "function") {
+          return current[methodName].bind(current);
+        }
+
+        current = current.$parent;
+      }
+
+      return null;
+    },
+
+    normalizePreviewEditableText(text: string) {
+      return text
+        .replace(/\u00a0/g, " ")
+        .replace(/\r/g, "")
+        .split("\n")
+        .map((line) => line.replace(/\s+$/g, ""))
+        .join("\n")
+        .trim();
+    },
+
+    normalizePreviewInlineSegmentText(text: string) {
+      return text.replace(/\u00a0/g, " ").replace(/\u200b/g, "").replace(/[\r\n]+/g, " ");
+    },
+
+    getPreviewInlineSegmentText(target: HTMLElement) {
+      return this.normalizePreviewInlineSegmentText(target.textContent || target.innerText || "");
+    },
+
+    ensurePreviewInlineTailTarget(paragraph: HTMLElement, inlineSegments: { textFragments: string[] }) {
+      const trailingFragment = inlineSegments.textFragments[inlineSegments.textFragments.length - 1];
+
+      if (typeof trailingFragment !== "string" || trailingFragment.length > 0) {
+        paragraph
+          .querySelectorAll(':scope > span[data-lia-preview-synthetic-tail="true"]')
+          .forEach((node) => node.remove());
+        return;
+      }
+
+      const lastChild = paragraph.lastElementChild as HTMLElement | null;
+
+      if (!lastChild || lastChild.tagName !== "INPUT" || !lastChild.classList.contains("lia-input")) {
+        return;
+      }
+
+      const existingTail = paragraph.querySelector(
+        ':scope > span[data-lia-preview-synthetic-tail="true"]'
+      ) as HTMLElement | null;
+
+      if (existingTail) {
+        if (!existingTail.textContent) {
+          existingTail.textContent = "\u200b";
+        }
+
+        return;
+      }
+
+      const tailTarget = paragraph.ownerDocument.createElement("span");
+      tailTarget.dataset.liaPreviewSyntheticTail = "true";
+      tailTarget.textContent = "\u200b";
+      lastChild.insertAdjacentElement("afterend", tailTarget);
+    },
+
+    resetPreviewSyntheticTailTarget(target: HTMLElement) {
+      if (target.dataset.liaPreviewSyntheticTail === "true" && !(target.textContent || "")) {
+        target.textContent = "\u200b";
+      }
+    },
+
+    appendPreviewInlineBreakText(text: string) {
+      if (text.endsWith("\n<br>\n")) {
+        return `${text}<br>\n`;
+      }
+
+      if (text.endsWith("\n")) {
+        return `${text}<br>\n`;
+      }
+
+      return `${text}\n<br>\n`;
+    },
+
+    markPreviewInlineGeneratedNode(node: HTMLElement) {
+      node.dataset.liaPreviewGenerated = "true";
+      return node;
+    },
+
+    cleanupPreviewInlineGeneratedNodes(paragraph: HTMLElement) {
+      const activeElement = paragraph.ownerDocument.activeElement as HTMLElement | null;
+
+      if (
+        activeElement &&
+        paragraph.contains(activeElement) &&
+        activeElement.getAttribute("data-lia-preview-editable") === "true"
+      ) {
+        return;
+      }
+
+      paragraph
+        .querySelectorAll(':scope > [data-lia-preview-generated="true"]')
+        .forEach((node) => node.remove());
+    },
+
+    ensurePreviewEditableOutsideBlur(previewDocument: Document) {
+      const body = previewDocument.body as HTMLBodyElement | null;
+
+      if (!body || body.dataset.liaPreviewOutsideBlurBound === "true") {
+        return;
+      }
+
+      this.ensurePreviewSelectionSync(previewDocument);
+
+      previewDocument.addEventListener(
+        "pointerdown",
+        (event) => {
+          const target = event.target as HTMLElement | null;
+
+          if (
+            target &&
+            target.closest(
+              '[data-lia-preview-editable="true"], input, textarea, select, button, a, label'
+            )
+          ) {
+            return;
+          }
+
+          const activeElement = previewDocument.activeElement as HTMLElement | null;
+
+          if (activeElement?.getAttribute("data-lia-preview-editable") === "true") {
+            activeElement.blur();
+          }
+        },
+        true
+      );
+
+      body.dataset.liaPreviewOutsideBlurBound = "true";
+    },
+
+    insertPlainTextIntoPreviewTarget(target: HTMLElement, text: string, previewDocument: Document) {
+      const selection = previewDocument.getSelection();
+
+      if (!selection || selection.rangeCount === 0) {
+        target.textContent = `${target.textContent || ""}${text}`;
+        return;
+      }
+
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+
+      const textNode = previewDocument.createTextNode(text);
+      range.insertNode(textNode);
+      range.setStartAfter(textNode);
+      range.setEndAfter(textNode);
+
+      selection.removeAllRanges();
+      selection.addRange(range);
+    },
+
+    focusPreviewEditableTarget(target: HTMLElement, previewDocument: Document) {
+      this.focusPreviewEditableTargetAt(target, previewDocument, false);
+    },
+
+    previewSelectionIsInsideTarget(target: HTMLElement, previewDocument: Document) {
+      const selection = previewDocument.getSelection();
+
+      return Boolean(selection && target.contains(selection.anchorNode));
+    },
+
+    getPreviewSelectionTarget(previewDocument: Document) {
+      const selection = previewDocument.getSelection();
+
+      if (!selection || selection.rangeCount === 0 || !selection.anchorNode) {
+        return null;
+      }
+
+      const anchorElement =
+        selection.anchorNode.nodeType === Node.ELEMENT_NODE
+          ? (selection.anchorNode as HTMLElement)
+          : selection.anchorNode.parentElement;
+
+      if (!anchorElement) {
+        return null;
+      }
+
+      const editableTarget = anchorElement.closest('[data-lia-preview-editable="true"]') as HTMLElement | null;
+
+      if (!editableTarget || !selection.focusNode || !editableTarget.contains(selection.focusNode)) {
+        return null;
+      }
+
+      return editableTarget;
+    },
+
+    getPreviewTargetSelectionOffsets(target: HTMLElement, previewDocument: Document) {
+      const selection = previewDocument.getSelection();
+
+      if (!selection || selection.rangeCount === 0) {
+        return null;
+      }
+
+      const range = selection.getRangeAt(0);
+
+      if (!target.contains(range.startContainer) || !target.contains(range.endContainer)) {
+        return null;
+      }
+
+      const startRange = previewDocument.createRange();
+      startRange.selectNodeContents(target);
+      startRange.setEnd(range.startContainer, range.startOffset);
+
+      const endRange = previewDocument.createRange();
+      endRange.selectNodeContents(target);
+      endRange.setEnd(range.endContainer, range.endOffset);
+
+      return {
+        startOffset: startRange.toString().length,
+        endOffset: endRange.toString().length,
+      };
+    },
+
+    syncPreviewTextSelection(node: HTMLElement, target: HTMLElement, previewDocument: Document) {
+      const syncPreviewSelection = this.findPreviewParentMethod("syncPreviewSelection");
+      const offsets = this.getPreviewTargetSelectionOffsets(target, previewDocument);
+      const sourcePrefixLength = (target.dataset.liaPreviewSourcePrefix || "").length;
+
+      if (!syncPreviewSelection || !offsets) {
+        return false;
+      }
+
+      return Boolean(
+        syncPreviewSelection({
+          kind: "block",
+          headingText: (previewDocument.querySelector("main > header")?.textContent || "").trim(),
+          blockIndex: Number(node.dataset.liaBlockIndex || -1),
+          startOffset: offsets.startOffset + sourcePrefixLength,
+          endOffset: offsets.endOffset + sourcePrefixLength,
+        })
+      );
+    },
+
+    syncPreviewInlineSelection(
+      node: HTMLElement,
+      target: HTMLElement,
+      previewDocument: Document,
+      inlineEditableTargets: HTMLElement[]
+    ) {
+      const syncPreviewSelection = this.findPreviewParentMethod("syncPreviewSelection");
+      const offsets = this.getPreviewTargetSelectionOffsets(target, previewDocument);
+      const segmentIndex = inlineEditableTargets.indexOf(target);
+
+      if (!syncPreviewSelection || !offsets || segmentIndex < 0) {
+        return false;
+      }
+
+      return Boolean(
+        syncPreviewSelection({
+          kind: "inline",
+          headingText: (previewDocument.querySelector("main > header")?.textContent || "").trim(),
+          blockIndex: Number(node.dataset.liaBlockIndex || -1),
+          segmentIndex,
+          startOffset: offsets.startOffset,
+          endOffset: offsets.endOffset,
+        })
+      );
+    },
+
+    syncPreviewSelectionFromDocument(previewDocument: Document) {
+      const target = this.getPreviewSelectionTarget(previewDocument);
+
+      if (!target) {
+        return false;
+      }
+
+      const node = target.closest(".lia-preview-block") as HTMLElement | null;
+
+      if (!node) {
+        return false;
+      }
+
+      if (target.dataset.liaPreviewInlineSegmentIndex !== undefined) {
+        const inlineEditableTargets = this.getPreviewInlineEditableTargets(node, previewDocument);
+
+        if (!inlineEditableTargets) {
+          return false;
+        }
+
+        return this.syncPreviewInlineSelection(node, target, previewDocument, inlineEditableTargets);
+      }
+
+      return this.syncPreviewTextSelection(node, target, previewDocument);
+    },
+
+    ensurePreviewSelectionSync(previewDocument: Document) {
+      const body = previewDocument.body as HTMLBodyElement | null;
+
+      if (!body || body.dataset.liaPreviewSelectionSyncBound === "true") {
+        return;
+      }
+
+      previewDocument.addEventListener("selectionchange", () => {
+        this.syncPreviewSelectionFromDocument(previewDocument);
+      });
+
+      body.dataset.liaPreviewSelectionSyncBound = "true";
+    },
+
+    placePreviewCaretFromPoint(
+      target: HTMLElement,
+      previewDocument: Document,
+      clientX: number,
+      clientY: number
+    ) {
+      const previewWindow = previewDocument.defaultView as (Window & {
+        caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+        caretRangeFromPoint?: (x: number, y: number) => Range | null;
+      }) | null;
+
+      if (!previewWindow) {
+        return false;
+      }
+
+      let range: Range | null = null;
+      const caretPosition = previewWindow.caretPositionFromPoint?.(clientX, clientY);
+
+      if (caretPosition) {
+        range = previewDocument.createRange();
+        range.setStart(caretPosition.offsetNode, caretPosition.offset);
+        range.collapse(true);
+      } else {
+        range = previewWindow.caretRangeFromPoint?.(clientX, clientY) || null;
+      }
+
+      if (!range || !target.contains(range.startContainer)) {
+        return false;
+      }
+
+      target.focus();
+
+      const selection = previewDocument.getSelection();
+
+      if (!selection) {
+        return false;
+      }
+
+      selection.removeAllRanges();
+      selection.addRange(range);
+
+      return true;
+    },
+
+    focusPreviewEditableTargetAt(target: HTMLElement, previewDocument: Document, collapseToStart: boolean) {
+      target.focus();
+
+      const selection = previewDocument.getSelection();
+
+      if (!selection) {
+        return;
+      }
+
+      const range = previewDocument.createRange();
+      range.selectNodeContents(target);
+      range.collapse(collapseToStart);
+
+      selection.removeAllRanges();
+      selection.addRange(range);
+    },
+
+    getPreviewEditableTargetOffset(target: HTMLElement, previewDocument: Document) {
+      const selection = previewDocument.getSelection();
+
+      if (!selection || selection.rangeCount === 0) {
+        return this.getPreviewInlineSegmentText(target).length;
+      }
+
+      const range = selection.getRangeAt(0);
+
+      if (!target.contains(range.startContainer)) {
+        return this.getPreviewInlineSegmentText(target).length;
+      }
+
+      const measurementRange = previewDocument.createRange();
+      measurementRange.selectNodeContents(target);
+      measurementRange.setEnd(range.startContainer, range.startOffset);
+
+      return measurementRange.toString().length;
+    },
+
+    getPreviewEditableTargetText(target: HTMLElement) {
+      return target.innerText || target.textContent || "";
+    },
+
+    isPreviewEditableSelectionCollapsed(target: HTMLElement, previewDocument: Document) {
+      const selection = previewDocument.getSelection();
+
+      return Boolean(
+        selection &&
+          selection.rangeCount > 0 &&
+          selection.isCollapsed &&
+          target.contains(selection.anchorNode)
+      );
+    },
+
+    isPreviewEditableCaretAtStart(target: HTMLElement, previewDocument: Document) {
+      if (!this.isPreviewEditableSelectionCollapsed(target, previewDocument)) {
+        return false;
+      }
+
+      return this.getPreviewEditableTargetOffset(target, previewDocument) === 0;
+    },
+
+    isPreviewEditableCaretAtEnd(target: HTMLElement, previewDocument: Document) {
+      if (!this.isPreviewEditableSelectionCollapsed(target, previewDocument)) {
+        return false;
+      }
+
+      return (
+        this.getPreviewEditableTargetOffset(target, previewDocument) >=
+        this.getPreviewEditableTargetText(target).length
+      );
+    },
+
+    mergePreviewTextBlock(
+      node: HTMLElement,
+      editableTarget: HTMLElement,
+      previewDocument: Document,
+      direction: "backward" | "forward"
+    ) {
+      const mergePreviewBlocks = this.findPreviewParentMethod("mergePreviewBlocks");
+
+      if (!mergePreviewBlocks) {
+        return false;
+      }
+
+      return Boolean(
+        mergePreviewBlocks({
+          headingText: (previewDocument.querySelector("main > header")?.textContent || "").trim(),
+          blockIndex: Number(node.dataset.liaBlockIndex || -1),
+          direction,
+          currentText: this.getPreviewEditableTargetText(editableTarget),
+        })
+      );
+    },
+
+    getPreviewInlineBlockText(node: HTMLElement, previewDocument: Document) {
+      const source = this.parsePreviewInlineBlockSource(this.getPreviewBlockSourceText(node, previewDocument));
+      const paragraph = node.querySelector(":scope > p.lia-paragraph") as HTMLElement | null;
+
+      if (!source || !paragraph) {
+        return null;
+      }
+
+      let text = "";
+      let tokenIndex = 0;
+
+      Array.from(paragraph.childNodes).forEach((childNode) => {
+        if (childNode.nodeType === previewDocument.TEXT_NODE) {
+          return;
+        }
+
+        if (!(childNode instanceof previewDocument.defaultView!.HTMLElement)) {
+          return;
+        }
+
+        if (childNode.tagName === "SPAN") {
+          text += this.getPreviewInlineSegmentText(childNode);
+          return;
+        }
+
+        if (childNode.tagName === "INPUT" && childNode.classList.contains("lia-input")) {
+          text += source.tokens[tokenIndex] || "";
+          tokenIndex += 1;
+          return;
+        }
+
+        if (childNode.tagName === "BR") {
+          text = this.appendPreviewInlineBreakText(text);
+        }
+      });
+
+      if (tokenIndex !== source.tokens.length) {
+        return null;
+      }
+
+      return text;
+    },
+
+    mergePreviewInlineBlock(
+      node: HTMLElement,
+      previewDocument: Document,
+      direction: "backward" | "forward"
+    ) {
+      const mergePreviewBlocks = this.findPreviewParentMethod("mergePreviewBlocks");
+
+      if (!mergePreviewBlocks) {
+        return false;
+      }
+
+      const currentText = this.getPreviewInlineBlockText(node, previewDocument);
+
+      if (currentText === null) {
+        return false;
+      }
+
+      return Boolean(
+        mergePreviewBlocks({
+          headingText: (previewDocument.querySelector("main > header")?.textContent || "").trim(),
+          blockIndex: Number(node.dataset.liaBlockIndex || -1),
+          direction,
+          currentText,
+        })
+      );
+    },
+
+    getPreviewInlineAdjacentElement(
+      target: HTMLElement,
+      direction: "backward" | "forward"
+    ): HTMLElement | null {
+      let sibling =
+        direction === "backward" ? target.previousSibling : target.nextSibling;
+
+      while (sibling) {
+        if (sibling.nodeType === Node.TEXT_NODE) {
+          if ((sibling.textContent || "").trim() === "") {
+            sibling = direction === "backward" ? sibling.previousSibling : sibling.nextSibling;
+            continue;
+          }
+
+          return null;
+        }
+
+        if (sibling instanceof target.ownerDocument.defaultView!.HTMLElement) {
+          return sibling;
+        }
+
+        sibling = direction === "backward" ? sibling.previousSibling : sibling.nextSibling;
+      }
+
+      return null;
+    },
+
+    removePreviewInlineAdjacentBreak(
+      target: HTMLElement,
+      previewDocument: Document,
+      direction: "backward" | "forward"
+    ) {
+      const adjacent = this.getPreviewInlineAdjacentElement(target, direction);
+
+      if (!adjacent || adjacent.tagName !== "BR") {
+        return false;
+      }
+
+      adjacent.remove();
+
+      const previewWindow = previewDocument.defaultView;
+      if (previewWindow?.requestAnimationFrame) {
+        previewWindow.requestAnimationFrame(() => {
+          this.focusPreviewEditableTargetAt(target, previewDocument, direction === "backward");
+        });
+      } else {
+        this.focusPreviewEditableTargetAt(target, previewDocument, direction === "backward");
+      }
+
+      return true;
+    },
+
+    isPreviewInlineBlockBoundaryTarget(
+      target: HTMLElement,
+      direction: "backward" | "forward"
+    ) {
+      let adjacent = this.getPreviewInlineAdjacentElement(target, direction);
+
+      while (adjacent && adjacent.tagName === "BR") {
+        adjacent = this.getPreviewInlineAdjacentElement(adjacent, direction) as HTMLElement | null;
+      }
+
+      if (!adjacent) {
+        return true;
+      }
+
+      if (
+        adjacent.tagName === "SPAN" &&
+        adjacent.dataset.liaPreviewSyntheticTail === "true" &&
+        direction === "forward"
+      ) {
+        return true;
+      }
+
+      return false;
+    },
+
+    insertPreviewInlineBreak(
+      node: HTMLElement,
+      target: HTMLElement,
+      previewDocument: Document,
+      targets: HTMLElement[]
+    ) {
+      const offset = this.getPreviewEditableTargetOffset(target, previewDocument);
+      const originalText = this.getPreviewInlineSegmentText(target);
+
+      if (!originalText) {
+        const br = this.markPreviewInlineGeneratedNode(previewDocument.createElement("br"));
+        target.insertAdjacentElement("beforebegin", br);
+        this.focusPreviewEditableTargetAt(target, previewDocument, true);
+        return;
+      }
+
+      if (offset <= 0) {
+        const br = this.markPreviewInlineGeneratedNode(previewDocument.createElement("br"));
+        target.insertAdjacentElement("beforebegin", br);
+        this.focusPreviewEditableTargetAt(target, previewDocument, true);
+        return;
+      }
+
+      const beforeText = originalText.slice(0, offset);
+      const afterText = originalText.slice(offset);
+      const nextTarget = previewDocument.createElement("span");
+      const targetIndex = targets.indexOf(target);
+
+      target.textContent = beforeText;
+
+      const br = this.markPreviewInlineGeneratedNode(previewDocument.createElement("br"));
+      target.insertAdjacentElement("afterend", br);
+      br.insertAdjacentElement("afterend", nextTarget);
+
+      if (targetIndex >= 0) {
+        targets.splice(targetIndex + 1, 0, nextTarget);
+      } else {
+        targets.push(nextTarget);
+      }
+
+      this.markPreviewInlineGeneratedNode(nextTarget);
+      nextTarget.textContent = afterText || (nextTarget.dataset.liaPreviewSyntheticTail === "true" ? "" : "\u200b");
+      this.bindPreviewInlineEditableTarget(node, nextTarget, previewDocument, targets);
+      this.focusPreviewEditableTargetAt(nextTarget, previewDocument, true);
+    },
+
+    insertPreviewInlineParagraphBreak(
+      node: HTMLElement,
+      target: HTMLElement,
+      previewDocument: Document
+    ) {
+      const paragraph = node.querySelector(":scope > p.lia-paragraph") as HTMLElement | null;
+      const source = this.parsePreviewInlineBlockSource(this.getPreviewBlockSourceText(node, previewDocument));
+
+      if (!paragraph || !source) {
+        return false;
+      }
+
+      const splitOffset = this.getPreviewEditableTargetOffset(target, previewDocument);
+      let beforeText = "";
+      let afterText = "";
+      let tokenIndex = 0;
+      let splitOccurred = false;
+
+      Array.from(paragraph.childNodes).forEach((childNode) => {
+        if (childNode.nodeType === previewDocument.TEXT_NODE) {
+          return;
+        }
+
+        if (!(childNode instanceof previewDocument.defaultView!.HTMLElement)) {
+          return;
+        }
+
+        if (childNode.tagName === "SPAN") {
+          const value = this.getPreviewInlineSegmentText(childNode);
+
+          if (childNode === target) {
+            beforeText += value.slice(0, splitOffset);
+            afterText += value.slice(splitOffset);
+            splitOccurred = true;
+            return;
+          }
+
+          if (splitOccurred) {
+            afterText += value;
+          } else {
+            beforeText += value;
+          }
+
+          return;
+        }
+
+        if (childNode.tagName === "INPUT" && childNode.classList.contains("lia-input")) {
+          const token = source.tokens[tokenIndex] || "";
+          tokenIndex += 1;
+
+          if (splitOccurred) {
+            afterText += token;
+          } else {
+            beforeText += token;
+          }
+
+          return;
+        }
+
+        if (childNode.tagName === "BR") {
+          if (splitOccurred) {
+            afterText = this.appendPreviewInlineBreakText(afterText);
+          } else {
+            beforeText = this.appendPreviewInlineBreakText(beforeText);
+          }
+        }
+      });
+
+      if (!splitOccurred || tokenIndex !== source.tokens.length) {
+        return false;
+      }
+
+      const editPreviewText = this.findPreviewParentMethod("editPreviewText");
+
+      if (!editPreviewText) {
+        return false;
+      }
+
+      return Boolean(
+        editPreviewText({
+          headingText: (previewDocument.querySelector("main > header")?.textContent || "").trim(),
+          blockIndex: Number(node.dataset.liaBlockIndex || -1),
+          text: `${beforeText}\n\n${afterText}`,
+        })
+      );
+    },
+
+    splitPreviewInlineBlock(
+      node: HTMLElement,
+      target: HTMLElement,
+      previewDocument: Document,
+      targets: HTMLElement[]
+    ) {
+      const paragraph = node.querySelector(":scope > p.lia-paragraph") as HTMLElement | null;
+      const source = this.parsePreviewInlineBlockSource(this.getPreviewBlockSourceText(node, previewDocument));
+
+      if (!paragraph || !source) {
+        return false;
+      }
+
+      const splitOffset = this.getPreviewEditableTargetOffset(target, previewDocument);
+      let beforeText = "";
+      let afterText = "";
+      let tokenIndex = 0;
+      let splitOccurred = false;
+
+      Array.from(paragraph.childNodes).forEach((childNode) => {
+        if (childNode.nodeType === previewDocument.TEXT_NODE) {
+          return;
+        }
+
+        if (!(childNode instanceof previewDocument.defaultView!.HTMLElement)) {
+          return;
+        }
+
+        if (childNode.tagName === "SPAN") {
+          const value = this.getPreviewInlineSegmentText(childNode);
+
+          if (childNode === target) {
+            beforeText += value.slice(0, splitOffset);
+            afterText += value.slice(splitOffset);
+            splitOccurred = true;
+            return;
+          }
+
+          if (splitOccurred) {
+            afterText += value;
+          } else {
+            beforeText += value;
+          }
+
+          return;
+        }
+
+        if (childNode.tagName === "INPUT" && childNode.classList.contains("lia-input")) {
+          const token = source.tokens[tokenIndex] || "";
+          tokenIndex += 1;
+
+          if (splitOccurred) {
+            afterText += token;
+          } else {
+            beforeText += token;
+          }
+
+          return;
+        }
+
+        if (childNode.tagName === "BR") {
+          if (splitOccurred) {
+            afterText += "\n<br>\n";
+          } else {
+            beforeText += "\n<br>\n";
+          }
+        }
+      });
+
+      if (!splitOccurred || tokenIndex !== source.tokens.length) {
+        return false;
+      }
+
+      const splitPreviewBlock = this.findPreviewParentMethod("splitPreviewBlock");
+
+      if (!splitPreviewBlock) {
+        return false;
+      }
+
+      return Boolean(
+        splitPreviewBlock({
+          headingText: (previewDocument.querySelector("main > header")?.textContent || "").trim(),
+          blockIndex: Number(node.dataset.liaBlockIndex || -1),
+          beforeText,
+          afterText,
+        })
+      );
+    },
+
+    bindPreviewInlineEditableTarget(
+      node: HTMLElement,
+      target: HTMLElement,
+      previewDocument: Document,
+      inlineEditableTargets: HTMLElement[]
+    ) {
+      target.dataset.liaPreviewEditable = "true";
+      target.dataset.liaPreviewInlineSegmentIndex = String(inlineEditableTargets.indexOf(target));
+      target.dataset.liaPreviewOriginalText = this.getPreviewInlineSegmentText(target);
+
+      if (target.dataset.liaPreviewEditBound === "true") {
+        return;
+      }
+
+      target.setAttribute("contenteditable", "true");
+      target.setAttribute("tabindex", "0");
+      target.setAttribute("role", "textbox");
+      target.style.userSelect = "text";
+      target.style.webkitUserSelect = "text";
+      target.style.pointerEvents = "auto";
+      if (target.dataset.liaPreviewSyntheticTail === "true") {
+        target.style.display = "inline-block";
+        target.style.minWidth = "0.75ch";
+      }
+      target.setAttribute("spellcheck", "false");
+
+      const keepEditLocal = (event: Event) => {
+        node.draggable = false;
+        node.removeAttribute("data-lia-block-drag-hover");
+        node.removeAttribute("data-lia-block-drag-armed");
+        event.stopPropagation();
+      };
+
+      target.addEventListener("pointerdown", keepEditLocal);
+
+      target.addEventListener("mousedown", keepEditLocal);
+
+      target.addEventListener("click", (event) => {
+        keepEditLocal(event);
+
+        const mouseEvent = event as MouseEvent;
+
+        if (this.placePreviewCaretFromPoint(target, previewDocument, mouseEvent.clientX, mouseEvent.clientY)) {
+          return;
+        }
+
+        if (this.previewSelectionIsInsideTarget(target, previewDocument)) {
+          return;
+        }
+
+        const previewWindow = previewDocument.defaultView;
+
+        if (previewWindow?.requestAnimationFrame) {
+          previewWindow.requestAnimationFrame(() => {
+            this.focusPreviewEditableTarget(target, previewDocument);
+            this.syncPreviewInlineSelection(node, target, previewDocument, inlineEditableTargets);
+          });
+        } else {
+          this.focusPreviewEditableTarget(target, previewDocument);
+          this.syncPreviewInlineSelection(node, target, previewDocument, inlineEditableTargets);
+        }
+      });
+
+      target.addEventListener("mouseup", () => {
+        this.syncPreviewInlineSelection(node, target, previewDocument, inlineEditableTargets);
+      });
+
+      target.addEventListener("keyup", () => {
+        this.syncPreviewInlineSelection(node, target, previewDocument, inlineEditableTargets);
+      });
+
+      target.addEventListener("focus", () => {
+        if (target.dataset.liaPreviewSyntheticTail === "true" && target.textContent === "\u200b") {
+          target.textContent = "";
+        }
+
+        target.dataset.liaPreviewOriginalText = this.getPreviewInlineSegmentText(target);
+        this.syncPreviewInlineSelection(node, target, previewDocument, inlineEditableTargets);
+      });
+
+      target.addEventListener("keydown", (event) => {
+        event.stopPropagation();
+
+        if (event.key === "Escape") {
+          event.preventDefault();
+          target.textContent = target.dataset.liaPreviewOriginalText || "";
+          target.blur();
+          return;
+        }
+
+        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+          event.preventDefault();
+          if (this.insertPreviewInlineParagraphBreak(node, target, previewDocument)) {
+            target.dataset.liaPreviewSkipBlurCommit = "true";
+          }
+          return;
+        }
+
+        if (event.key === "Enter") {
+          event.preventDefault();
+          this.insertPreviewInlineBreak(node, target, previewDocument, inlineEditableTargets);
+          return;
+        }
+
+        if (
+          event.key === "Backspace" &&
+          this.isPreviewEditableCaretAtStart(target, previewDocument)
+        ) {
+          event.preventDefault();
+
+          if (this.removePreviewInlineAdjacentBreak(target, previewDocument, "backward")) {
+            return;
+          }
+
+          if (!this.isPreviewInlineBlockBoundaryTarget(target, "backward")) {
+            return;
+          }
+
+          target.dataset.liaPreviewSkipBlurCommit = "true";
+          this.mergePreviewInlineBlock(node, previewDocument, "backward");
+          return;
+        }
+
+        if (
+          event.key === "Delete" &&
+          this.isPreviewEditableCaretAtEnd(target, previewDocument)
+        ) {
+          event.preventDefault();
+
+          if (this.removePreviewInlineAdjacentBreak(target, previewDocument, "forward")) {
+            return;
+          }
+
+          if (!this.isPreviewInlineBlockBoundaryTarget(target, "forward")) {
+            return;
+          }
+
+          target.dataset.liaPreviewSkipBlurCommit = "true";
+          this.mergePreviewInlineBlock(node, previewDocument, "forward");
+        }
+      });
+
+      target.addEventListener("blur", (event) => {
+        if (target.dataset.liaPreviewSkipBlurCommit === "true") {
+          delete target.dataset.liaPreviewSkipBlurCommit;
+          this.resetPreviewSyntheticTailTarget(target);
+          return;
+        }
+
+        const nextTarget = event.relatedTarget as HTMLElement | null;
+
+        if (
+          nextTarget &&
+          nextTarget !== target &&
+          node.contains(nextTarget) &&
+          nextTarget.getAttribute("data-lia-preview-editable") === "true"
+        ) {
+          this.resetPreviewSyntheticTailTarget(target);
+          return;
+        }
+
+        const changed = this.commitPreviewInlineSegments(node, previewDocument, inlineEditableTargets);
+
+        if (!changed) {
+          target.textContent = target.dataset.liaPreviewOriginalText || target.textContent || "";
+        }
+
+        this.resetPreviewSyntheticTailTarget(target);
+      });
+
+      target.dataset.liaPreviewEditBound = "true";
+    },
+
+    commitPreviewTextEdit(node: HTMLElement, previewDocument: Document) {
+      const editableTarget = this.getPreviewEditableTextTarget(node, previewDocument);
+
+      if (!editableTarget) {
+        return false;
+      }
+
+      const originalText = editableTarget.dataset.liaPreviewOriginalText || "";
+      const nextText = this.normalizePreviewEditableText(
+        editableTarget.innerText || editableTarget.textContent || ""
+      );
+      const formattedSource = this.parsePreviewFormattedBlockSource(
+        this.getPreviewBlockSourceText(node, previewDocument)
+      );
+      const sourcePrefix = editableTarget.dataset.liaPreviewSourcePrefix || formattedSource?.prefix || "";
+      const sourceSuffix = editableTarget.dataset.liaPreviewSourceSuffix || formattedSource?.suffix || "";
+
+      if (nextText === originalText) {
+        editableTarget.textContent = originalText;
+        return false;
+      }
+
+      const payload = {
+        headingText: (previewDocument.querySelector("main > header")?.textContent || "").trim(),
+        blockIndex: Number(node.dataset.liaBlockIndex || -1),
+        text: `${sourcePrefix}${nextText}${sourceSuffix}`,
+      };
+      const parent = this.$parent as any;
+      const changed =
+        typeof parent?.editPreviewText === "function"
+          ? parent.editPreviewText(payload)
+          : (this.$emit("editText", payload), true);
+
+      if (!changed) {
+        editableTarget.textContent = originalText;
+        return false;
+      }
+
+      editableTarget.dataset.liaPreviewOriginalText = nextText;
+      return true;
+    },
+
+    getPreviewBlockSourceText(node: HTMLElement, previewDocument: Document) {
+      const payload = {
+        headingText: (previewDocument.querySelector("main > header")?.textContent || "").trim(),
+        blockIndex: Number(node.dataset.liaBlockIndex || -1),
+      };
+      const getPreviewBlockText = this.findPreviewParentMethod("getPreviewBlockText");
+
+      if (getPreviewBlockText) {
+        return getPreviewBlockText(payload);
+      }
+
+      return null;
+    },
+
+    getPreviewInlineSegments(node: HTMLElement, previewDocument: Document) {
+      const payload = {
+        headingText: (previewDocument.querySelector("main > header")?.textContent || "").trim(),
+        blockIndex: Number(node.dataset.liaBlockIndex || -1),
+      };
+      const getPreviewInlineTextSegments = this.findPreviewParentMethod("getPreviewInlineTextSegments");
+
+      if (getPreviewInlineTextSegments) {
+        return getPreviewInlineTextSegments(payload);
+      }
+
+      return null;
+    },
+
+    parsePreviewInlineBlockSource(sourceText: string | null) {
+      if (!sourceText) {
+        return null;
+      }
+
+      const tokenPattern = /(\[\[[^\]]*\]\])/g;
+      const parts = sourceText.split(tokenPattern);
+      const tokens: string[] = [];
+      const textFragments: string[] = [];
+
+      parts.forEach((part, index) => {
+        if (index % 2 === 0) {
+          textFragments.push(part);
+        } else {
+          tokens.push(part);
+        }
+      });
+
+      if (!tokens.length || textFragments.length !== tokens.length + 1) {
+        return null;
+      }
+
+      return {
+        tokens,
+        textFragments,
+      };
+    },
+
+    getPreviewVisibleInlineFragmentText(fragment: string) {
+      return fragment.replace(/\r/g, "").replace(/\s*<br>\s*/g, "").replace(/[\n]+/g, "");
+    },
+
+    splitPreviewInlineEditableFragment(fragment: string) {
+      const match = fragment.match(/^([\s\S]*<br>\s*)([\s\S]*)$/);
+
+      if (match) {
+        return {
+          prefix: match[1] || "",
+          editableText: match[2] || "",
+        };
+      }
+
+      return {
+        prefix: "",
+        editableText: fragment,
+      };
+    },
+
+    getPreviewInlineEditableFragmentMappings(sourceText: string | null) {
+      const parsed = this.parsePreviewInlineBlockSource(sourceText);
+
+      if (!parsed) {
+        return null;
+      }
+
+      const mappings = parsed.textFragments
+        .map((fragment, fragmentIndex) => {
+          const split = this.splitPreviewInlineEditableFragment(fragment);
+
+          return {
+            fragmentIndex,
+            prefix: split.prefix,
+            editableText: split.editableText,
+            visibleText: this.getPreviewVisibleInlineFragmentText(split.editableText),
+          };
+        })
+        .filter((mapping) => mapping.visibleText.length > 0);
+
+      return {
+        ...parsed,
+        mappings,
+      };
+    },
+
+    commitPreviewInlineSegments(node: HTMLElement, previewDocument: Document, targets: HTMLElement[]) {
+      const source = this.parsePreviewInlineBlockSource(this.getPreviewBlockSourceText(node, previewDocument));
+      const paragraph = node.querySelector(":scope > p.lia-paragraph") as HTMLElement | null;
+
+      if (!source || !paragraph) {
+        return false;
+      }
+
+      let text = "";
+      let tokenIndex = 0;
+
+      Array.from(paragraph.childNodes).forEach((childNode) => {
+        if (childNode.nodeType === previewDocument.TEXT_NODE) {
+          return;
+        }
+
+        if (!(childNode instanceof previewDocument.defaultView!.HTMLElement)) {
+          return;
+        }
+
+        if (childNode.tagName === "SPAN") {
+          text += this.getPreviewInlineSegmentText(childNode);
+          return;
+        }
+
+        if (childNode.tagName === "INPUT" && childNode.classList.contains("lia-input")) {
+          text += source.tokens[tokenIndex] || "";
+          tokenIndex += 1;
+          return;
+        }
+
+        if (childNode.tagName === "BR") {
+          text = this.appendPreviewInlineBreakText(text);
+        }
+      });
+
+      if (!text || tokenIndex !== source.tokens.length) {
+        return false;
+      }
+
+      const payload = {
+        headingText: (previewDocument.querySelector("main > header")?.textContent || "").trim(),
+        blockIndex: Number(node.dataset.liaBlockIndex || -1),
+        text,
+      };
+      const editPreviewText = this.findPreviewParentMethod("editPreviewText");
+
+      if (!editPreviewText) {
+        return false;
+      }
+
+      return Boolean(editPreviewText(payload));
+    },
+
+    getPreviewInlineEditableTargets(node: HTMLElement, previewDocument: Document) {
+      const paragraph = node.querySelector(":scope > p.lia-paragraph") as HTMLElement | null;
+
+      if (!paragraph || !paragraph.querySelector("input.lia-input")) {
+        return null;
+      }
+
+      this.ensurePreviewEditableOutsideBlur(previewDocument);
+
+      this.cleanupPreviewInlineGeneratedNodes(paragraph);
+
+      const spans = Array.from(paragraph.querySelectorAll(":scope > span")) as HTMLElement[];
+      const inlineSegments = this.parsePreviewInlineBlockSource(this.getPreviewBlockSourceText(node, previewDocument));
+      const inputCount = paragraph.querySelectorAll(":scope > input.lia-input").length;
+
+      if (!inlineSegments || inputCount !== inlineSegments.tokens.length) {
+        return null;
+      }
+
+      this.ensurePreviewInlineTailTarget(paragraph, inlineSegments);
+
+      const nextSpans = Array.from(paragraph.querySelectorAll(":scope > span")) as HTMLElement[];
+
+      if (!nextSpans.length) {
+        return null;
+      }
+
+      return nextSpans;
+    },
+
+    openPreviewBlockSourceEditor(node: HTMLElement, previewDocument: Document) {
+      if (node.dataset.liaPreviewBlockEditorOpen === "true") {
+        node.querySelector(":scope > .lia-preview-block__editor")?.focus();
+        return;
+      }
+
+      const sourceText = this.getPreviewBlockSourceText(node, previewDocument);
+
+      if (!sourceText) {
+        return;
+      }
+
+      const editor = previewDocument.createElement("textarea");
+      editor.className = "lia-preview-block__editor";
+      editor.value = sourceText;
+      editor.setAttribute("spellcheck", "false");
+      editor.dataset.liaPreviewOriginalText = sourceText;
+
+      const saveAndClose = () => {
+        const nextText = this.normalizePreviewEditableText(editor.value || "");
+        const changed =
+          nextText !== editor.dataset.liaPreviewOriginalText &&
+          this.commitPreviewBlockSourceEdit(node, previewDocument, nextText);
+
+        if (!changed) {
+          editor.value = editor.dataset.liaPreviewOriginalText || editor.value;
+        }
+
+        editor.remove();
+        node.removeAttribute("data-lia-preview-block-editor-open");
+      };
+
+      editor.addEventListener("keydown", (event) => {
+        event.stopPropagation();
+
+        if (event.key === "Escape") {
+          event.preventDefault();
+          editor.value = editor.dataset.liaPreviewOriginalText || editor.value;
+          editor.remove();
+          node.removeAttribute("data-lia-preview-block-editor-open");
+          return;
+        }
+
+        if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+          event.preventDefault();
+          editor.blur();
+        }
+      });
+
+      editor.addEventListener("blur", saveAndClose);
+
+      node.dataset.liaPreviewBlockEditorOpen = "true";
+      node.appendChild(editor);
+      editor.focus();
+      editor.setSelectionRange(editor.value.length, editor.value.length);
+    },
+
+    commitPreviewBlockSourceEdit(node: HTMLElement, previewDocument: Document, text: string) {
+      const payload = {
+        headingText: (previewDocument.querySelector("main > header")?.textContent || "").trim(),
+        blockIndex: Number(node.dataset.liaBlockIndex || -1),
+        text,
+      };
+      const parent = this.$parent as any;
+      const changed =
+        typeof parent?.editPreviewText === "function"
+          ? parent.editPreviewText(payload)
+          : (this.$emit("editText", payload), true);
+
+      return Boolean(changed);
+    },
+
+    shouldUsePreviewBlockSourceEditor(node: HTMLElement) {
+      return Boolean(node.querySelector(":scope > p .lia-input, :scope > .lia-quiz, :scope > input.lia-input"));
+    },
+
+    isPreviewBlockDragEdge(node: HTMLElement, clientX: number, clientY: number) {
+      const rect = node.getBoundingClientRect();
+      const offsetX = clientX - rect.left;
+      const offsetY = clientY - rect.top;
+      const threshold = 16;
+
+      if (offsetX < 0 || offsetY < 0 || offsetX > rect.width || offsetY > rect.height) {
+        return false;
+      }
+
+      return (
+        offsetX <= threshold ||
+        offsetX >= rect.width - threshold ||
+        offsetY <= threshold ||
+        offsetY >= rect.height - threshold
+      );
     },
 
     clearPreviewBlockDropPreview(previewDocument?: Document | null) {
@@ -821,7 +2551,125 @@ export default {
         ?.querySelectorAll(".lia-preview-block[data-lia-block-dragging]")
         .forEach((node) => node.removeAttribute("data-lia-block-dragging"));
 
+      previewRoot
+        ?.querySelectorAll(".lia-preview-block[data-lia-block-drag-hover]")
+        .forEach((node) => node.removeAttribute("data-lia-block-drag-hover"));
+
       this.clearPreviewBlockDropPreview(previewRoot || undefined);
+    },
+
+    bindPreviewPlainEditableTarget(node: HTMLElement, editableTarget: HTMLElement, previewDocument: Document) {
+      editableTarget.dataset.liaPreviewEditable = "true";
+      editableTarget.dataset.liaPreviewOriginalText = this.normalizePreviewEditableText(
+        editableTarget.innerText || editableTarget.textContent || ""
+      );
+
+      if (editableTarget.dataset.liaPreviewEditBound === "true") {
+        return;
+      }
+
+      editableTarget.setAttribute("contenteditable", "true");
+      editableTarget.setAttribute("tabindex", "0");
+      editableTarget.setAttribute("role", "textbox");
+      editableTarget.style.userSelect = "text";
+      editableTarget.style.webkitUserSelect = "text";
+      editableTarget.style.pointerEvents = "auto";
+      editableTarget.setAttribute("spellcheck", "false");
+
+      const keepEditLocal = (event: Event) => {
+        node.draggable = false;
+        node.removeAttribute("data-lia-block-drag-hover");
+        node.removeAttribute("data-lia-block-drag-armed");
+        event.stopPropagation();
+      };
+
+      editableTarget.addEventListener("pointerdown", keepEditLocal);
+      editableTarget.addEventListener("mousedown", keepEditLocal);
+      editableTarget.addEventListener("click", (event) => {
+        keepEditLocal(event);
+
+        const mouseEvent = event as MouseEvent;
+
+        if (
+          this.placePreviewCaretFromPoint(
+            editableTarget,
+            previewDocument,
+            mouseEvent.clientX,
+            mouseEvent.clientY
+          )
+        ) {
+          return;
+        }
+
+        if (this.previewSelectionIsInsideTarget(editableTarget, previewDocument)) {
+          this.syncPreviewTextSelection(node, editableTarget, previewDocument);
+          return;
+        }
+
+        this.focusPreviewEditableTarget(editableTarget, previewDocument);
+        this.syncPreviewTextSelection(node, editableTarget, previewDocument);
+      });
+
+      editableTarget.addEventListener("mouseup", () => {
+        this.syncPreviewTextSelection(node, editableTarget, previewDocument);
+      });
+
+      editableTarget.addEventListener("keyup", () => {
+        this.syncPreviewTextSelection(node, editableTarget, previewDocument);
+      });
+
+      editableTarget.addEventListener("paste", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const pastedText = event.clipboardData?.getData("text/plain") || "";
+        this.insertPlainTextIntoPreviewTarget(editableTarget, pastedText, previewDocument);
+      });
+
+      editableTarget.addEventListener("focus", () => {
+        editableTarget.dataset.liaPreviewOriginalText = this.normalizePreviewEditableText(
+          editableTarget.innerText || editableTarget.textContent || ""
+        );
+        node.draggable = false;
+        node.removeAttribute("data-lia-block-drag-hover");
+        node.removeAttribute("data-lia-block-drag-armed");
+        this.syncPreviewTextSelection(node, editableTarget, previewDocument);
+      });
+
+      editableTarget.addEventListener("keydown", (event) => {
+        event.stopPropagation();
+
+        if (event.key === "Escape") {
+          event.preventDefault();
+          editableTarget.textContent = editableTarget.dataset.liaPreviewOriginalText || "";
+          editableTarget.blur();
+          return;
+        }
+
+        if (event.key === "Backspace" && this.isPreviewEditableCaretAtStart(editableTarget, previewDocument)) {
+          event.preventDefault();
+          editableTarget.dataset.liaPreviewSkipBlurCommit = "true";
+          this.mergePreviewTextBlock(node, editableTarget, previewDocument, "backward");
+          return;
+        }
+
+        if (event.key === "Delete" && this.isPreviewEditableCaretAtEnd(editableTarget, previewDocument)) {
+          event.preventDefault();
+          editableTarget.dataset.liaPreviewSkipBlurCommit = "true";
+          this.mergePreviewTextBlock(node, editableTarget, previewDocument, "forward");
+        }
+      });
+
+      editableTarget.addEventListener("blur", () => {
+        if (editableTarget.dataset.liaPreviewSkipBlurCommit === "true") {
+          delete editableTarget.dataset.liaPreviewSkipBlurCommit;
+          return;
+        }
+
+        this.commitPreviewTextEdit(node, previewDocument);
+      });
+
+      editableTarget.dataset.liaPreviewEditBound = "true";
     },
 
     bindPreviewBlockInteractions() {
@@ -833,112 +2681,218 @@ export default {
         return;
       }
 
+      this.bindPreviewInsertZones(previewDocument, main as HTMLElement);
+
       Array.from(main.querySelectorAll(":scope > .lia-preview-block")).forEach((node) => {
         if (!(node instanceof iframe.contentWindow!.HTMLElement)) {
           return;
         }
 
         if (node.dataset.liaBlockReorderBound === "true") {
-          node.draggable = true;
+          node.draggable = false;
+        } else {
+          node.draggable = false;
+
+          const armDrag = (event: MouseEvent | PointerEvent) => {
+            const enabled = this.isPreviewBlockDragEdge(node, event.clientX, event.clientY);
+
+            node.draggable = enabled;
+
+            if (enabled) {
+              node.dataset.liaBlockDragArmed = "true";
+            } else {
+              node.removeAttribute("data-lia-block-drag-armed");
+            }
+          };
+
+          const updateHoverState = (event: MouseEvent | PointerEvent) => {
+            if (this.isPreviewBlockDragEdge(node, event.clientX, event.clientY)) {
+              node.dataset.liaBlockDragHover = "true";
+            } else {
+              node.removeAttribute("data-lia-block-drag-hover");
+            }
+          };
+
+          node.addEventListener("pointermove", updateHoverState);
+          node.addEventListener("mousemove", updateHoverState);
+          node.addEventListener("pointerdown", armDrag);
+          node.addEventListener("mousedown", armDrag);
+
+          node.addEventListener("pointerleave", () => {
+            if (!node.hasAttribute("data-lia-block-dragging")) {
+              node.removeAttribute("data-lia-block-drag-hover");
+            }
+          });
+
+          node.addEventListener("mouseleave", () => {
+            if (!node.hasAttribute("data-lia-block-dragging")) {
+              node.removeAttribute("data-lia-block-drag-hover");
+            }
+          });
+
+          node.addEventListener("pointerup", () => {
+            if (!node.hasAttribute("data-lia-block-dragging")) {
+              node.draggable = false;
+              node.removeAttribute("data-lia-block-drag-armed");
+            }
+          });
+
+          node.addEventListener("pointercancel", () => {
+            if (!node.hasAttribute("data-lia-block-dragging")) {
+              node.draggable = false;
+              node.removeAttribute("data-lia-block-drag-armed");
+            }
+          });
+
+          node.addEventListener("dragstart", (event) => {
+            if (node.dataset.liaBlockDragArmed !== "true") {
+              event.preventDefault();
+              this.clearPreviewBlockDragState(previewDocument);
+              node.draggable = false;
+              return;
+            }
+
+            this.previewBlockPointerDragState = {
+              blockIndex: Number(node.dataset.liaBlockIndex || -1),
+              headingText:
+                (previewDocument.querySelector("main > header")?.textContent || "").trim(),
+            };
+
+            node.dataset.liaBlockDragging = "true";
+            this.clearPreviewBlockDropPreview(previewDocument);
+
+            if (event.dataTransfer) {
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData("text/plain", node.dataset.liaBlockIndex || "");
+            }
+          });
+
+          node.addEventListener("dragover", (event) => {
+            const dragState = this.previewBlockPointerDragState;
+            const targetIndex = Number(node.dataset.liaBlockIndex || -1);
+
+            if (!dragState || targetIndex < 0 || targetIndex === dragState.blockIndex) {
+              return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            this.clearPreviewBlockDropPreview(previewDocument);
+
+            if (event.dataTransfer) {
+              event.dataTransfer.dropEffect = "move";
+            }
+
+            const rect = node.getBoundingClientRect();
+            const position = event.clientY > rect.top + rect.height / 2 ? "after" : "before";
+
+            node.dataset.liaBlockDrop = position;
+          });
+
+          node.addEventListener("dragleave", (event) => {
+            if (!node.contains(event.relatedTarget as Node | null)) {
+              node.removeAttribute("data-lia-block-drop");
+            }
+          });
+
+          node.addEventListener("drop", (event) => {
+            const dragState = this.previewBlockPointerDragState;
+            const targetIndex = Number(node.dataset.liaBlockIndex || -1);
+
+            if (!dragState || targetIndex < 0 || targetIndex === dragState.blockIndex) {
+              this.clearPreviewBlockDragState(previewDocument);
+              return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            const rect = node.getBoundingClientRect();
+            const position = event.clientY > rect.top + rect.height / 2 ? "after" : "before";
+            const payload = {
+              kind: "block",
+              headingText: dragState.headingText,
+              draggedBlockIndex: dragState.blockIndex,
+              targetBlockIndex: targetIndex,
+              position,
+            };
+            const parent = this.$parent as any;
+
+            if (typeof parent?.reorderPreviewMedia === "function") {
+              parent.reorderPreviewMedia(payload);
+            } else {
+              this.$emit("reorder", payload);
+            }
+
+            this.clearPreviewBlockDragState(previewDocument);
+          });
+
+          node.addEventListener("dragend", () => {
+            this.clearPreviewBlockDragState(previewDocument);
+            node.draggable = false;
+            node.removeAttribute("data-lia-block-drag-armed");
+          });
+
+          node.dataset.liaBlockReorderBound = "true";
+        }
+
+        const editableTarget = this.getPreviewEditableTextTarget(node, previewDocument);
+
+        const inlineEditableTargets = this.getPreviewInlineEditableTargets(node, previewDocument);
+
+        if (inlineEditableTargets) {
+          inlineEditableTargets.forEach((target, segmentIndex) => {
+            target.dataset.liaPreviewInlineSegmentIndex = String(segmentIndex);
+            this.bindPreviewInlineEditableTarget(node, target, previewDocument, inlineEditableTargets);
+          });
+
           return;
         }
 
-        node.draggable = true;
-
-        node.addEventListener("dragstart", (event) => {
-          const interactiveTarget =
-            event.target && typeof (event.target as Element).closest === "function"
-              ? (event.target as Element).closest(
-                  "input, textarea, select, button, a, label, summary, audio, video, img"
-                )
-              : null;
-
-          if (interactiveTarget) {
-            event.preventDefault();
-            this.clearPreviewBlockDragState(previewDocument);
+        if (!editableTarget && this.shouldUsePreviewBlockSourceEditor(node)) {
+          if (node.dataset.liaPreviewBlockSourceEditBound === "true") {
             return;
           }
 
-          this.previewBlockPointerDragState = {
-            blockIndex: Number(node.dataset.liaBlockIndex || -1),
-            headingText:
-              (previewDocument.querySelector("main > header")?.textContent || "").trim(),
+          const openSourceEditor = (event: Event) => {
+            const target = event.target as HTMLElement | null;
+            const formattedTarget = this.getPreviewFormattedEditableTarget(node, previewDocument);
+
+            if (!target || target.closest("input, button, select, textarea, a")) {
+              return;
+            }
+
+            if (formattedTarget) {
+              event.stopPropagation();
+              delete node.dataset.liaPreviewBlockSourceEditBound;
+              this.bindPreviewPlainEditableTarget(node, formattedTarget, previewDocument);
+              this.focusPreviewEditableTarget(formattedTarget, previewDocument);
+              this.syncPreviewTextSelection(node, formattedTarget, previewDocument);
+              return;
+            }
+
+            if (!target.closest("p, span, .lia-paragraph")) {
+              return;
+            }
+
+            event.stopPropagation();
+            this.openPreviewBlockSourceEditor(node, previewDocument);
           };
 
-          node.dataset.liaBlockDragging = "true";
-          this.clearPreviewBlockDropPreview(previewDocument);
+          node.addEventListener("click", openSourceEditor);
 
-          if (event.dataTransfer) {
-            event.dataTransfer.effectAllowed = "move";
-            event.dataTransfer.setData("text/plain", node.dataset.liaBlockIndex || "");
-          }
-        });
+          Array.from(node.querySelectorAll(":scope > p, :scope > p span")).forEach((textNode) => {
+            textNode.addEventListener("click", openSourceEditor);
+          });
 
-        node.addEventListener("dragover", (event) => {
-          const dragState = this.previewBlockPointerDragState;
-          const targetIndex = Number(node.dataset.liaBlockIndex || -1);
+          node.dataset.liaPreviewBlockSourceEditBound = "true";
+          return;
+        }
 
-          if (!dragState || targetIndex < 0 || targetIndex === dragState.blockIndex) {
-            return;
-          }
-
-          event.preventDefault();
-          event.stopPropagation();
-          this.clearPreviewBlockDropPreview(previewDocument);
-
-          if (event.dataTransfer) {
-            event.dataTransfer.dropEffect = "move";
-          }
-
-          const rect = node.getBoundingClientRect();
-          const position = event.clientY > rect.top + rect.height / 2 ? "after" : "before";
-
-          node.dataset.liaBlockDrop = position;
-        });
-
-        node.addEventListener("dragleave", (event) => {
-          if (!node.contains(event.relatedTarget as Node | null)) {
-            node.removeAttribute("data-lia-block-drop");
-          }
-        });
-
-        node.addEventListener("drop", (event) => {
-          const dragState = this.previewBlockPointerDragState;
-          const targetIndex = Number(node.dataset.liaBlockIndex || -1);
-
-          if (!dragState || targetIndex < 0 || targetIndex === dragState.blockIndex) {
-            this.clearPreviewBlockDragState(previewDocument);
-            return;
-          }
-
-          event.preventDefault();
-          event.stopPropagation();
-
-          const rect = node.getBoundingClientRect();
-          const position = event.clientY > rect.top + rect.height / 2 ? "after" : "before";
-          const payload = {
-            kind: "block",
-            headingText: dragState.headingText,
-            draggedBlockIndex: dragState.blockIndex,
-            targetBlockIndex: targetIndex,
-            position,
-          };
-          const parent = this.$parent as any;
-
-          if (typeof parent?.reorderPreviewMedia === "function") {
-            parent.reorderPreviewMedia(payload);
-          } else {
-            this.$emit("reorder", payload);
-          }
-
-          this.clearPreviewBlockDragState(previewDocument);
-        });
-
-        node.addEventListener("dragend", () => {
-          this.clearPreviewBlockDragState(previewDocument);
-        });
-
-        node.dataset.liaBlockReorderBound = "true";
+        if (!editableTarget) {
+          return;
+        }
+        this.bindPreviewPlainEditableTarget(node, editableTarget, previewDocument);
       });
     },
 
@@ -972,6 +2926,8 @@ export default {
           return;
         }
 
+        node.querySelector(":scope > .lia-preview-block__drag-handle")?.remove();
+
         node.classList.add("lia-preview-block");
         node.dataset.liaBlockIndex = String(
           main.querySelectorAll(":scope > .lia-preview-block").length
@@ -993,6 +2949,7 @@ export default {
       });
 
       this.bindPreviewBlockInteractions();
+      this.focusPendingPreviewBlock(previewDocument, main as HTMLElement);
 
     },
 

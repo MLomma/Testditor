@@ -388,6 +388,7 @@ export default {
       }
 
       this.make(action.command);
+      this.$emit("compile");
     },
 
     storeAudioFile(record) {
@@ -593,6 +594,635 @@ export default {
       }
 
       return blocks;
+    },
+
+    isPreviewEditableBlock(lines: string[]) {
+      const meaningfulLines = lines.filter((line) => line.trim() !== "");
+
+      if (meaningfulLines.length === 0) {
+        return false;
+      }
+
+      return meaningfulLines.every(
+        (line) =>
+          !/^\s*(#{1,6}\s+|[-*+]\s+|\d+\.\s+|>\s+|```|~~~|\|)/.test(line) &&
+          !/(^|\s)(!\?\[|!\[|\?\?\[|\?\[|```|~~~|\{\{)/.test(line)
+      );
+    },
+
+    getPreviewBlockText(params: { headingText: string; blockIndex: number }) {
+      if (!Editor) {
+        return null;
+      }
+
+      const code = Editor.getValue();
+
+      if (!code) {
+        return null;
+      }
+
+      const lines = code.split(/\r?\n/);
+      const section = this.findSectionRangeByHeading(lines, params.headingText);
+
+      if (!section) {
+        return null;
+      }
+
+      const blocks = this.getReorderableBlocks(
+        lines,
+        section.contentStart,
+        section.contentEndExclusive
+      );
+      const targetBlock = blocks[params.blockIndex];
+
+      if (!targetBlock || !this.isPreviewEditableBlock(targetBlock.lines)) {
+        return null;
+      }
+
+      return targetBlock.lines.join("\n");
+    },
+
+    getPreviewInlineTextSegments(params: { headingText: string; blockIndex: number }) {
+      if (!Editor) {
+        return null;
+      }
+
+      const code = Editor.getValue();
+
+      if (!code) {
+        return null;
+      }
+
+      const lines = code.split(/\r?\n/);
+      const section = this.findSectionRangeByHeading(lines, params.headingText);
+
+      if (!section) {
+        return null;
+      }
+
+      const blocks = this.getReorderableBlocks(
+        lines,
+        section.contentStart,
+        section.contentEndExclusive
+      );
+      const targetBlock = blocks[params.blockIndex];
+
+      if (!targetBlock || targetBlock.lines.length !== 1) {
+        return null;
+      }
+
+      const line = targetBlock.lines[0];
+      const tokenPattern = /(\[\[[^\]]*\]\])/g;
+      const tokens = line.match(tokenPattern) || [];
+
+      if (!tokens.length) {
+        return null;
+      }
+
+      const segments = line.split(tokenPattern).filter((_, index) => index % 2 === 0);
+
+      if (segments.length !== tokens.length + 1) {
+        return null;
+      }
+
+      return {
+        segments,
+        tokens,
+      };
+    },
+
+    getPreviewBlockRange(params: {
+      headingText: string;
+      blockIndex: number;
+      startOffset: number;
+      endOffset: number;
+    }) {
+      if (!Editor) {
+        return null;
+      }
+
+      const code = Editor.getValue();
+
+      if (!code) {
+        return null;
+      }
+
+      const lines = code.split(/\r?\n/);
+      const section = this.findSectionRangeByHeading(lines, params.headingText);
+
+      if (!section) {
+        return null;
+      }
+
+      const blocks = this.getReorderableBlocks(
+        lines,
+        section.contentStart,
+        section.contentEndExclusive
+      );
+      const targetBlock = blocks[params.blockIndex];
+
+      if (!targetBlock || !this.isPreviewEditableBlock(targetBlock.lines)) {
+        return null;
+      }
+
+      const blockText = targetBlock.lines.join("\n");
+      const startOffset = Math.max(0, Math.min(params.startOffset, blockText.length));
+      const endOffset = Math.max(startOffset, Math.min(params.endOffset, blockText.length));
+
+      const toPosition = (offset: number) => {
+        const prefix = blockText.slice(0, offset);
+        const prefixLines = prefix.split("\n");
+        const lineNumber = targetBlock.start + prefixLines.length;
+        const column = prefixLines[prefixLines.length - 1].length + 1;
+
+        return {
+          lineNumber,
+          column,
+        };
+      };
+
+      const start = toPosition(startOffset);
+      const end = toPosition(endOffset);
+
+      return {
+        startLineNumber: start.lineNumber,
+        startColumn: start.column,
+        endLineNumber: end.lineNumber,
+        endColumn: end.column,
+      };
+    },
+
+    getPreviewInlineRange(params: {
+      headingText: string;
+      blockIndex: number;
+      segmentIndex: number;
+      startOffset: number;
+      endOffset: number;
+    }) {
+      if (!Editor) {
+        return null;
+      }
+
+      const code = Editor.getValue();
+
+      if (!code) {
+        return null;
+      }
+
+      const lines = code.split(/\r?\n/);
+      const section = this.findSectionRangeByHeading(lines, params.headingText);
+
+      if (!section) {
+        return null;
+      }
+
+      const blocks = this.getReorderableBlocks(
+        lines,
+        section.contentStart,
+        section.contentEndExclusive
+      );
+      const targetBlock = blocks[params.blockIndex];
+
+      if (!targetBlock || targetBlock.lines.length !== 1) {
+        return null;
+      }
+
+      const source = this.getPreviewInlineTextSegments({
+        headingText: params.headingText,
+        blockIndex: params.blockIndex,
+      });
+
+      if (!source || params.segmentIndex < 0 || params.segmentIndex >= source.segments.length) {
+        return null;
+      }
+
+      let segmentStart = 0;
+
+      for (let index = 0; index < params.segmentIndex; index++) {
+        segmentStart += source.segments[index].length;
+
+        if (index < source.tokens.length) {
+          segmentStart += source.tokens[index].length;
+        }
+      }
+
+      const segmentText = source.segments[params.segmentIndex] || "";
+      const startOffset = Math.max(0, Math.min(params.startOffset, segmentText.length));
+      const endOffset = Math.max(startOffset, Math.min(params.endOffset, segmentText.length));
+      const lineNumber = targetBlock.start + 1;
+
+      return {
+        startLineNumber: lineNumber,
+        startColumn: segmentStart + startOffset + 1,
+        endLineNumber: lineNumber,
+        endColumn: segmentStart + endOffset + 1,
+      };
+    },
+
+    syncPreviewSelection(params: any) {
+      if (!Editor) {
+        return false;
+      }
+
+      const range =
+        params?.kind === "inline"
+          ? this.getPreviewInlineRange(params)
+          : this.getPreviewBlockRange(params);
+
+      if (!range) {
+        return false;
+      }
+
+      Editor.setSelection(range);
+      Editor.revealRangeInCenterIfOutsideViewport(range);
+      return true;
+    },
+
+    normalizePreviewEditedText(text: string) {
+      return text
+        .replace(/\u00a0/g, " ")
+        .replace(/\r/g, "")
+        .split("\n")
+        .map((line) => line.replace(/\s+$/g, ""))
+        .join("\n")
+        .trim();
+    },
+
+    normalizePreviewInlineSegmentText(text: string) {
+      return text.replace(/\u00a0/g, " ").replace(/[\r\n]+/g, " ");
+    },
+
+    normalizePreviewSplitBlockText(text: string) {
+      return text.replace(/\u00a0/g, " ").replace(/\r/g, "");
+    },
+
+    updatePreviewBlockText(params: { headingText: string; blockIndex: number; text: string }) {
+      if (!Editor) {
+        return false;
+      }
+
+      const code = Editor.getValue();
+
+      if (!code) {
+        return false;
+      }
+
+      const eol = Editor.getModel()?.getEOL() || "\n";
+      const hasTrailingNewline = /\r?\n$/.test(code);
+      const lines = code.split(/\r?\n/);
+      const section = this.findSectionRangeByHeading(lines, params.headingText);
+
+      if (!section) {
+        return false;
+      }
+
+      const blocks = this.getReorderableBlocks(
+        lines,
+        section.contentStart,
+        section.contentEndExclusive
+      );
+      const targetBlock = blocks[params.blockIndex];
+
+      if (!targetBlock || !this.isPreviewEditableBlock(targetBlock.lines)) {
+        return false;
+      }
+
+      const normalizedText = this.normalizePreviewEditedText(params.text || "");
+      const replacementLines = normalizedText ? normalizedText.split("\n") : [];
+      const nextLines = [
+        ...lines.slice(0, targetBlock.start),
+        ...replacementLines,
+        ...lines.slice(targetBlock.endExclusive),
+      ];
+      const nextCode = nextLines.join(eol) + (hasTrailingNewline ? eol : "");
+
+      if (nextCode === code) {
+        return false;
+      }
+
+      Editor.executeEdits("preview-text-edit", [
+        {
+          range: Editor.getModel().getFullModelRange(),
+          text: nextCode,
+        },
+      ]);
+
+      return true;
+    },
+
+    updatePreviewInlineTextSegments(params: {
+      headingText: string;
+      blockIndex: number;
+      segments: string[];
+    }) {
+      if (!Editor) {
+        return false;
+      }
+
+      const code = Editor.getValue();
+
+      if (!code) {
+        return false;
+      }
+
+      const eol = Editor.getModel()?.getEOL() || "\n";
+      const hasTrailingNewline = /\r?\n$/.test(code);
+      const lines = code.split(/\r?\n/);
+      const section = this.findSectionRangeByHeading(lines, params.headingText);
+
+      if (!section) {
+        return false;
+      }
+
+      const blocks = this.getReorderableBlocks(
+        lines,
+        section.contentStart,
+        section.contentEndExclusive
+      );
+      const targetBlock = blocks[params.blockIndex];
+
+      if (!targetBlock || targetBlock.lines.length !== 1) {
+        return false;
+      }
+
+      const source = this.getPreviewInlineTextSegments(params);
+
+      if (!source || source.segments.length !== params.segments.length) {
+        return false;
+      }
+
+      const nextSegments = params.segments.map((segment) =>
+        this.normalizePreviewInlineSegmentText(segment || "")
+      );
+      let rebuiltLine = "";
+
+      for (let index = 0; index < source.tokens.length; index++) {
+        rebuiltLine += nextSegments[index] + source.tokens[index];
+      }
+
+      rebuiltLine += nextSegments[nextSegments.length - 1] || "";
+
+      const nextLines = [
+        ...lines.slice(0, targetBlock.start),
+        rebuiltLine,
+        ...lines.slice(targetBlock.endExclusive),
+      ];
+      const nextCode = nextLines.join(eol) + (hasTrailingNewline ? eol : "");
+
+      if (nextCode === code) {
+        return false;
+      }
+
+      Editor.executeEdits("preview-inline-text-edit", [
+        {
+          range: Editor.getModel().getFullModelRange(),
+          text: nextCode,
+        },
+      ]);
+
+      return true;
+    },
+
+    splitPreviewBlock(params: {
+      headingText: string;
+      blockIndex: number;
+      beforeText: string;
+      afterText: string;
+    }) {
+      if (!Editor) {
+        return false;
+      }
+
+      const code = Editor.getValue();
+
+      if (!code) {
+        return false;
+      }
+
+      const eol = Editor.getModel()?.getEOL() || "\n";
+      const hasTrailingNewline = /\r?\n$/.test(code);
+      const lines = code.split(/\r?\n/);
+      const section = this.findSectionRangeByHeading(lines, params.headingText);
+
+      if (!section) {
+        return false;
+      }
+
+      const blocks = this.getReorderableBlocks(
+        lines,
+        section.contentStart,
+        section.contentEndExclusive
+      );
+      const targetBlock = blocks[params.blockIndex];
+
+      if (!targetBlock || !this.isPreviewEditableBlock(targetBlock.lines)) {
+        return false;
+      }
+
+      const beforeText = this.normalizePreviewSplitBlockText(params.beforeText || "") || "\u200b";
+      const afterText = this.normalizePreviewSplitBlockText(params.afterText || "") || "\u200b";
+      const replacementLines = [
+        ...beforeText.split("\n"),
+        "",
+        ...afterText.split("\n"),
+      ];
+      const nextLines = [
+        ...lines.slice(0, targetBlock.start),
+        ...replacementLines,
+        ...lines.slice(targetBlock.endExclusive),
+      ];
+      const nextCode = nextLines.join(eol) + (hasTrailingNewline ? eol : "");
+
+      if (nextCode === code) {
+        return false;
+      }
+
+      Editor.executeEdits("preview-block-split", [
+        {
+          range: Editor.getModel().getFullModelRange(),
+          text: nextCode,
+        },
+      ]);
+
+      return true;
+    },
+
+    appendPreviewBlock(params: { headingText: string }) {
+      if (!Editor) {
+        return false;
+      }
+
+      const code = Editor.getValue();
+
+      if (!code) {
+        return false;
+      }
+
+      const eol = Editor.getModel()?.getEOL() || "\n";
+      const hasTrailingNewline = /\r?\n$/.test(code);
+      const lines = code.split(/\r?\n/);
+      const section = this.findSectionRangeByHeading(lines, params.headingText);
+
+      if (!section) {
+        return false;
+      }
+
+      const blocks = this.getReorderableBlocks(
+        lines,
+        section.contentStart,
+        section.contentEndExclusive
+      );
+      const insertAt = blocks.length
+        ? blocks[blocks.length - 1].endExclusive
+        : section.contentStart;
+      const leadingLines = lines.slice(section.contentStart, insertAt);
+      const trailingLines = lines.slice(insertAt, section.contentEndExclusive);
+      const rebuiltSectionLines = [...leadingLines];
+
+      if (
+        rebuiltSectionLines.length > 0 &&
+        rebuiltSectionLines[rebuiltSectionLines.length - 1].trim() !== ""
+      ) {
+        rebuiltSectionLines.push("");
+      }
+
+      rebuiltSectionLines.push("\u200b");
+
+      const nextLines = [
+        ...lines.slice(0, section.contentStart),
+        ...rebuiltSectionLines,
+        ...trailingLines,
+        ...lines.slice(section.contentEndExclusive),
+      ];
+      const nextCode = nextLines.join(eol) + (hasTrailingNewline ? eol : "");
+
+      if (nextCode === code) {
+        return false;
+      }
+
+      Editor.executeEdits("preview-block-append", [
+        {
+          range: Editor.getModel().getFullModelRange(),
+          text: nextCode,
+        },
+      ]);
+
+      return true;
+    },
+
+    mergePreviewBlocks(params: {
+      headingText: string;
+      blockIndex: number;
+      direction: "backward" | "forward";
+      currentText: string;
+    }) {
+      if (!Editor) {
+        return false;
+      }
+
+      const code = Editor.getValue();
+
+      if (!code) {
+        return false;
+      }
+
+      const eol = Editor.getModel()?.getEOL() || "\n";
+      const hasTrailingNewline = /\r?\n$/.test(code);
+      const lines = code.split(/\r?\n/);
+      const section = this.findSectionRangeByHeading(lines, params.headingText);
+
+      if (!section) {
+        return false;
+      }
+
+      const blocks = this.getReorderableBlocks(
+        lines,
+        section.contentStart,
+        section.contentEndExclusive
+      );
+      const currentBlock = blocks[params.blockIndex];
+
+      if (!currentBlock) {
+        return false;
+      }
+
+      const normalizedCurrentText = this.normalizePreviewEditedText(params.currentText || "");
+      const currentLines = normalizedCurrentText ? normalizedCurrentText.split("\n") : [];
+      const directionOffset = params.direction === "backward" ? -1 : 1;
+      const neighborIndex = params.blockIndex + directionOffset;
+      const neighborBlock = blocks[neighborIndex];
+      const orderedBlocks = blocks.map((block, index) =>
+        index === params.blockIndex ? [...currentLines] : [...block.lines]
+      );
+
+      if (normalizedCurrentText) {
+        if (!neighborBlock) {
+          return false;
+        }
+
+        const currentMergedText = currentLines.join("\n");
+        const neighborText = this.normalizePreviewEditedText(neighborBlock.lines.join("\n"));
+        const leftIndex = params.direction === "backward" ? neighborIndex : params.blockIndex;
+        const rightIndex = params.direction === "backward" ? params.blockIndex : neighborIndex;
+        const mergedText =
+          params.direction === "backward"
+            ? `${neighborText}${currentMergedText}`
+            : `${currentMergedText}${neighborText}`;
+
+        orderedBlocks.splice(
+          leftIndex,
+          rightIndex - leftIndex + 1,
+          mergedText ? mergedText.split("\n") : []
+        );
+      } else {
+        orderedBlocks.splice(params.blockIndex, 1);
+      }
+
+      const leadingLines = lines.slice(section.contentStart, blocks[0]?.start || section.contentEndExclusive);
+      const trailingLines = lines.slice(
+        blocks[blocks.length - 1]?.endExclusive || section.contentStart,
+        section.contentEndExclusive
+      );
+      const rebuiltSectionLines = [...leadingLines];
+
+      orderedBlocks.forEach((blockLines, index) => {
+        if (!blockLines.length) {
+          return;
+        }
+
+        if (
+          index > 0 &&
+          rebuiltSectionLines.length > 0 &&
+          rebuiltSectionLines[rebuiltSectionLines.length - 1].trim() !== ""
+        ) {
+          rebuiltSectionLines.push("");
+        }
+
+        rebuiltSectionLines.push(...blockLines);
+      });
+
+      rebuiltSectionLines.push(...trailingLines);
+
+      const nextLines = [
+        ...lines.slice(0, section.contentStart),
+        ...rebuiltSectionLines,
+        ...lines.slice(section.contentEndExclusive),
+      ];
+      const nextCode = nextLines.join(eol) + (hasTrailingNewline ? eol : "");
+
+      if (nextCode === code) {
+        return false;
+      }
+
+      Editor.executeEdits("preview-block-merge", [
+        {
+          range: Editor.getModel().getFullModelRange(),
+          text: nextCode,
+        },
+      ]);
+
+      Editor.focus();
+      return true;
     },
 
     reorderPreviewBlocks(params: {
@@ -1223,15 +1853,7 @@ I (study) ~[[ am going to study ]]~ harder this term.
           if (text) {
             op.text = "[[" + text + "]]";
           } else {
-            op = {
-              range: {
-                startLineNumber: position.lineNumber || 1,
-                startColumn: 0,
-                endLineNumber: position.lineNumber || 1,
-                endColumn: 1,
-              },
-              text: "[[solution]]",
-            };
+            op.text = "[[solution]]";
           }
           break;
         }

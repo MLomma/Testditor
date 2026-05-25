@@ -611,6 +611,118 @@ export default {
       }
     },
 
+    editPreviewText(params: any) {
+      if (!this.$refs.editor) {
+        return false;
+      }
+
+      const changed = this.$refs.editor.updatePreviewBlockText(params);
+
+      if (changed) {
+        this.compile();
+      }
+
+      return changed;
+    },
+
+    getPreviewBlockText(params: any) {
+      if (!this.$refs.editor) {
+        return null;
+      }
+
+      return this.$refs.editor.getPreviewBlockText(params);
+    },
+
+    getPreviewInlineTextSegments(params: any) {
+      if (!this.$refs.editor) {
+        return null;
+      }
+
+      return this.$refs.editor.getPreviewInlineTextSegments(params);
+    },
+
+    editPreviewInlineTextSegments(params: any) {
+      if (!this.$refs.editor) {
+        return false;
+      }
+
+      const source = this.$refs.editor.getPreviewInlineTextSegments(params);
+
+      if (!source || source.segments.length !== params?.segments?.length) {
+        return false;
+      }
+
+      let text = "";
+
+      for (let index = 0; index < source.tokens.length; index++) {
+        text += `${params.segments[index] || ""}${source.tokens[index]}`;
+      }
+
+      text += params.segments[source.segments.length - 1] || "";
+
+      const changed = this.$refs.editor.updatePreviewBlockText({
+        headingText: params.headingText,
+        blockIndex: params.blockIndex,
+        text,
+      });
+
+      if (changed) {
+        this.compile();
+      }
+
+      return changed;
+    },
+
+    splitPreviewBlock(params: any) {
+      if (!this.$refs.editor) {
+        return false;
+      }
+
+      const changed = this.$refs.editor.splitPreviewBlock(params);
+
+      if (changed) {
+        this.compile();
+      }
+
+      return changed;
+    },
+
+    createPreviewBlock(params: any) {
+      if (!this.$refs.editor) {
+        return false;
+      }
+
+      const changed = this.$refs.editor.appendPreviewBlock(params);
+
+      if (changed) {
+        this.compile();
+      }
+
+      return changed;
+    },
+
+    syncPreviewSelection(params: any) {
+      if (!this.$refs.editor) {
+        return false;
+      }
+
+      return this.$refs.editor.syncPreviewSelection(params);
+    },
+
+    mergePreviewBlocks(params: any) {
+      if (!this.$refs.editor) {
+        return false;
+      }
+
+      const changed = this.$refs.editor.mergePreviewBlocks(params);
+
+      if (changed) {
+        this.compile();
+      }
+
+      return changed;
+    },
+
     previewUpdate(params: any) {
       console.log("liascript: update");
 
@@ -1148,6 +1260,7 @@ export default {
             @update="previewUpdate"
             @goto="gotoEditor"
             @reorder="reorderPreviewMedia"
+            @edit-text="editPreviewText"
             :fetchError="fetchError"
             :lights="lights"
             :class="{ invisible: previewNotReady }"
