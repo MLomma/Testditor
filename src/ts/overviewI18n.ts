@@ -87,6 +87,26 @@ const overviewUi = {
         description:
           'Dropping a Markdown link into the editor now merges it with the current document instead of only inserting content.',
       },
+      {
+        title: 'Direct editing in the live preview',
+        description:
+          'Plain text and formatted inline text can now be edited directly inside the preview, including more precise caret placement at the clicked position.',
+      },
+      {
+        title: 'Preview selection and toolbar sync',
+        description:
+          'Selections and cursor positions from the preview are synchronized back to the editor so toolbar actions such as bold, italic, or quiz insertion apply at the exact preview position.',
+      },
+      {
+        title: 'Instant preview updates while editing',
+        description:
+          'Changes triggered from the preview now compile back immediately so the rendered result stays in sync without a manual refresh step.',
+      },
+      {
+        title: 'Quiz settings via right click',
+        description:
+          'Quiz blocks in the preview now open a context menu on right click for Partial Solution, Tries, Quiz Content, and an optional Mathematics mode that inserts Algebrite checks and the required header import.',
+      },
     ],
     switchThemeTitle: 'Switch between light and dark mode',
     translateOverviewTitle: 'Translate overview',
@@ -179,6 +199,26 @@ const overviewUi = {
         title: 'Zusammenführen per Drag and Drop in den Editor',
         description:
           'Ein Markdown-Link wird beim Hineinziehen jetzt mit dem aktuellen Dokument zusammengeführt, statt nur eingefügt zu werden.',
+      },
+      {
+        title: 'Direktes Bearbeiten in der Live-Vorschau',
+        description:
+          'Einfacher Text und formatierter Inline-Text lassen sich jetzt direkt in der Vorschau bearbeiten, einschließlich genauer Cursor-Platzierung an der angeklickten Stelle.',
+      },
+      {
+        title: 'Synchronisierung von Vorschau-Auswahl und Toolbar',
+        description:
+          'Auswahl und Cursorposition aus der Vorschau werden zurück in den Editor gespiegelt, sodass Toolbar-Aktionen wie Fett, Kursiv oder Quiz-Einfügen genau an der gewählten Preview-Stelle landen.',
+      },
+      {
+        title: 'Sofortige Vorschau-Updates beim Bearbeiten',
+        description:
+          'Änderungen aus der Vorschau werden jetzt unmittelbar neu kompiliert, sodass das gerenderte Ergebnis ohne manuellen Zwischenschritt aktuell bleibt.',
+      },
+      {
+        title: 'Quiz-Einstellungen per Rechtsklick',
+        description:
+          'Quiz-Blöcke in der Vorschau öffnen jetzt per Rechtsklick ein Kontextmenü für Partial Solution, Tries, Quiz Content und einen optionalen Mathematik-Modus, der Algebrite-Prüfungen samt benötigtem Header-Import ergänzt.',
       },
     ],
     switchThemeTitle: 'Zwischen Hell- und Dunkelmodus wechseln',
