@@ -633,6 +633,14 @@ export default {
       return this.$refs.editor.getPreviewBlockText(params);
     },
 
+    getPreviewBlockSource(params: any) {
+      if (!this.$refs.editor) {
+        return null;
+      }
+
+      return this.$refs.editor.getPreviewBlockSource(params);
+    },
+
     getPreviewInlineTextSegments(params: any) {
       if (!this.$refs.editor) {
         return null;
@@ -665,6 +673,34 @@ export default {
         blockIndex: params.blockIndex,
         text,
       });
+
+      if (changed) {
+        this.compile();
+      }
+
+      return changed;
+    },
+
+    editPreviewBlockSource(params: any) {
+      if (!this.$refs.editor) {
+        return false;
+      }
+
+      const changed = this.$refs.editor.updatePreviewBlockSource(params);
+
+      if (changed) {
+        this.compile();
+      }
+
+      return changed;
+    },
+
+    updatePreviewHeaderImport(params: any) {
+      if (!this.$refs.editor) {
+        return false;
+      }
+
+      const changed = this.$refs.editor.updatePreviewHeaderImport(params);
 
       if (changed) {
         this.compile();

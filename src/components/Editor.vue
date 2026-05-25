@@ -642,6 +642,38 @@ export default {
       return targetBlock.lines.join("\n");
     },
 
+    getPreviewBlockSource(params: { headingText: string; blockIndex: number }) {
+      if (!Editor) {
+        return null;
+      }
+
+      const code = Editor.getValue();
+
+      if (!code) {
+        return null;
+      }
+
+      const lines = code.split(/\r?\n/);
+      const section = this.findSectionRangeByHeading(lines, params.headingText);
+
+      if (!section) {
+        return null;
+      }
+
+      const blocks = this.getReorderableBlocks(
+        lines,
+        section.contentStart,
+        section.contentEndExclusive
+      );
+      const targetBlock = blocks[params.blockIndex];
+
+      if (!targetBlock) {
+        return null;
+      }
+
+      return targetBlock.lines.join("\n");
+    },
+
     getPreviewInlineTextSegments(params: { headingText: string; blockIndex: number }) {
       if (!Editor) {
         return null;
@@ -901,6 +933,126 @@ export default {
       }
 
       Editor.executeEdits("preview-text-edit", [
+        {
+          range: Editor.getModel().getFullModelRange(),
+          text: nextCode,
+        },
+      ]);
+
+      return true;
+    },
+
+    updatePreviewBlockSource(params: { headingText: string; blockIndex: number; text: string }) {
+      if (!Editor) {
+        return false;
+      }
+
+      const code = Editor.getValue();
+
+      if (!code) {
+        return false;
+      }
+
+      const eol = Editor.getModel()?.getEOL() || "\n";
+      const hasTrailingNewline = /\r?\n$/.test(code);
+      const lines = code.split(/\r?\n/);
+      const section = this.findSectionRangeByHeading(lines, params.headingText);
+
+      if (!section) {
+        return false;
+      }
+
+      const blocks = this.getReorderableBlocks(
+        lines,
+        section.contentStart,
+        section.contentEndExclusive
+      );
+      const targetBlock = blocks[params.blockIndex];
+
+      if (!targetBlock) {
+        return false;
+      }
+
+      const normalizedText = (params.text || "").replace(/\u00a0/g, " ").replace(/\r/g, "");
+      const replacementLines = normalizedText ? normalizedText.split("\n") : [];
+      const nextLines = [
+        ...lines.slice(0, targetBlock.start),
+        ...replacementLines,
+        ...lines.slice(targetBlock.endExclusive),
+      ];
+      const nextCode = nextLines.join(eol) + (hasTrailingNewline ? eol : "");
+
+      if (nextCode === code) {
+        return false;
+      }
+
+      Editor.executeEdits("preview-block-source-edit", [
+        {
+          range: Editor.getModel().getFullModelRange(),
+          text: nextCode,
+        },
+      ]);
+
+      return true;
+    },
+
+    updatePreviewHeaderImport(params: { importLine: string; enabled: boolean }) {
+      if (!Editor) {
+        return false;
+      }
+
+      const code = Editor.getValue();
+
+      if (!code) {
+        return false;
+      }
+
+      const eol = Editor.getModel()?.getEOL() || "\n";
+      const hasTrailingNewline = /\r?\n$/.test(code);
+      const lines = code.split(/\r?\n/);
+      const importLine = (params.importLine || "").trim();
+
+      if (!importLine) {
+        return false;
+      }
+
+      const nextLines = [...lines];
+      const firstNonEmptyIndex = nextLines.findIndex((line) => line.trim() !== "");
+
+      if (firstNonEmptyIndex >= 0 && nextLines[firstNonEmptyIndex].trim() === "<!--") {
+        let endIndex = -1;
+
+        for (let index = firstNonEmptyIndex + 1; index < nextLines.length; index++) {
+          if (nextLines[index].trim() === "-->") {
+            endIndex = index;
+            break;
+          }
+        }
+
+        if (endIndex >= 0) {
+          const existingIndex = nextLines.findIndex(
+            (line, index) => index > firstNonEmptyIndex && index < endIndex && line.trim() === importLine
+          );
+
+          if (params.enabled) {
+            if (existingIndex < 0) {
+              nextLines.splice(endIndex, 0, importLine);
+            }
+          } else if (existingIndex >= 0) {
+            nextLines.splice(existingIndex, 1);
+          }
+        }
+      } else if (params.enabled) {
+        nextLines.unshift("<!--", importLine, "-->", "");
+      }
+
+      const nextCode = nextLines.join(eol) + (hasTrailingNewline ? eol : "");
+
+      if (nextCode === code) {
+        return false;
+      }
+
+      Editor.executeEdits("preview-header-import-edit", [
         {
           range: Editor.getModel().getFullModelRange(),
           text: nextCode,

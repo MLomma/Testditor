@@ -862,6 +862,69 @@ export default {
         "  outline: 1px solid rgba(255, 255, 255, 0.25);",
         "  outline-offset: 0.15rem;",
         "}",
+        ".lia-preview-quiz-settings {",
+        "  position: fixed;",
+        "  z-index: 2147483647;",
+        "  min-width: 16rem;",
+        "  padding: 0.75rem 0.85rem;",
+        "  border: 1px solid rgba(" + accentRgb + ", 0.4);",
+        "  border-radius: 0.75rem;",
+        "  background: rgba(20, 24, 28, 0.94);",
+        "  color: #fff;",
+        "  box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.35);",
+        "  display: grid;",
+        "  gap: 0.75rem;",
+        "}",
+        ".lia-preview-quiz-settings[hidden] {",
+        "  display: none;",
+        "}",
+        ".lia-preview-quiz-settings__row {",
+        "  display: flex;",
+        "  align-items: center;",
+        "  gap: 0.65rem;",
+        "}",
+        ".lia-preview-quiz-settings__stack {",
+        "  display: grid;",
+        "  gap: 0.4rem;",
+        "}",
+        ".lia-preview-quiz-settings__checkbox {",
+        "  inline-size: 1rem;",
+        "  block-size: 1rem;",
+        `  accent-color: ${accentColor};`,
+        "  cursor: pointer;",
+        "}",
+        ".lia-preview-quiz-settings__label {",
+        "  font-size: 15px;",
+        "}",
+        ".lia-preview-quiz-settings__input {",
+        "  width: 100%;",
+        "  border: 1px solid rgba(255,255,255,0.2);",
+        "  border-radius: 0.45rem;",
+        "  background: rgba(255,255,255,0.08);",
+        "  color: inherit;",
+        "  padding: 0.28rem 0.45rem;",
+        "}",
+        ".lia-preview-quiz-settings__input--tries {",
+        "  width: 4.5rem;",
+        "  margin-left: auto;",
+        "}",
+        ".lia-preview-quiz-settings__input:focus {",
+        "  outline: 1px solid rgba(" + accentRgb + ", 0.75);",
+        "  outline-offset: 0.08rem;",
+        "}",
+        ".lia-preview-quiz-settings__actions {",
+        "  display: flex;",
+        "  justify-content: flex-end;",
+        "  gap: 0.5rem;",
+        "}",
+        ".lia-preview-quiz-settings__button {",
+        "  border: 1px solid rgba(" + accentRgb + ", 0.45);",
+        "  border-radius: 0.45rem;",
+        "  background: rgba(" + accentRgb + ", 0.14);",
+        "  color: inherit;",
+        "  padding: 0.35rem 0.6rem;",
+        "  cursor: pointer;",
+        "}",
         "main > .lia-preview-block[data-lia-block-dragging='true'] {",
         "  opacity: 0.72;",
         "  cursor: grabbing;",
@@ -2259,7 +2322,12 @@ export default {
         headingText: (previewDocument.querySelector("main > header")?.textContent || "").trim(),
         blockIndex: Number(node.dataset.liaBlockIndex || -1),
       };
+      const getPreviewBlockSource = this.findPreviewParentMethod("getPreviewBlockSource");
       const getPreviewBlockText = this.findPreviewParentMethod("getPreviewBlockText");
+
+      if (getPreviewBlockSource) {
+        return getPreviewBlockSource(payload);
+      }
 
       if (getPreviewBlockText) {
         return getPreviewBlockText(payload);
@@ -2505,11 +2573,276 @@ export default {
       };
       const parent = this.$parent as any;
       const changed =
-        typeof parent?.editPreviewText === "function"
+        typeof parent?.editPreviewBlockSource === "function"
+          ? parent.editPreviewBlockSource(payload)
+          : typeof parent?.editPreviewText === "function"
           ? parent.editPreviewText(payload)
           : (this.$emit("editText", payload), true);
 
       return Boolean(changed);
+    },
+
+    parsePreviewQuizSettings(sourceText: string | null) {
+      const result = {
+        showPartialSolution: false,
+        solutionButton: "",
+        quizContent: "",
+        mathEnabled: false,
+        bodyLines: [] as string[],
+        leadingLines: [] as string[],
+      };
+
+      if (!sourceText) {
+        return result;
+      }
+
+      const lines = sourceText.replace(/\r/g, "").split("\n");
+      let index = 0;
+
+      while (index < lines.length && /^\s*<!--.*-->\s*$/.test(lines[index])) {
+        const line = lines[index];
+        let handled = false;
+
+        if (/data-show-partial-solution/.test(line)) {
+          result.showPartialSolution = true;
+          handled = true;
+        }
+
+        const solutionMatch = line.match(/data-solution-button="([^"]+)"/);
+        if (solutionMatch) {
+          result.solutionButton = solutionMatch[1];
+          handled = true;
+        }
+
+        if (!handled) {
+          result.leadingLines.push(line);
+        }
+
+        index += 1;
+      }
+
+      result.bodyLines = lines.slice(index);
+
+      const bodyText = result.bodyLines.join("\n");
+      const quizContentMatch = bodyText.match(/\[\[\s*([\s\S]*?)\s*\]\]/);
+      const mathMatch = bodyText.match(/^\s*@Algebrite\.check\((.*)\)\s*$/m);
+
+      if (quizContentMatch) {
+        result.quizContent = quizContentMatch[1];
+      }
+
+      if (mathMatch) {
+        result.mathEnabled = true;
+      }
+
+      return result;
+    },
+
+    buildPreviewQuizSettingsComment(showPartialSolution: boolean, solutionButton: string) {
+      const trimmedSolutionButton = solutionButton.trim();
+
+      if (showPartialSolution && trimmedSolutionButton) {
+        return `<!-- data-show-partial-solution  data-solution-button="${trimmedSolutionButton}"  -->`;
+      }
+
+      if (showPartialSolution) {
+        return "<!-- data-show-partial-solution -->";
+      }
+
+      if (trimmedSolutionButton) {
+        return `<!--  data-solution-button="${trimmedSolutionButton}"  -->`;
+      }
+
+      return "";
+    },
+
+    updatePreviewQuizSettings(node: HTMLElement, previewDocument: Document, settings: { showPartialSolution: boolean; solutionButton: string; quizContent: string; mathEnabled: boolean; }) {
+      const sourceText = this.getPreviewBlockSourceText(node, previewDocument);
+      const parsed = this.parsePreviewQuizSettings(sourceText);
+      const comment = this.buildPreviewQuizSettingsComment(
+        settings.showPartialSolution,
+        settings.solutionButton
+      );
+      const trimmedQuizContent = settings.quizContent.trim();
+      let nextBodyText = parsed.bodyLines
+        .join("\n")
+        .replace(/\[\[[\s\S]*?\]\]/, `[[ ${trimmedQuizContent} ]]`);
+      nextBodyText = nextBodyText
+        .replace(/^\s*@Algebrite\.check\((.*)\)\s*$/gm, "")
+        .replace(/\n{3,}/g, "\n\n")
+        .trimEnd();
+
+      if (settings.mathEnabled) {
+        nextBodyText = `${nextBodyText}\n@Algebrite.check(${trimmedQuizContent})`;
+      }
+
+      const nextLines = [...parsed.leadingLines];
+
+      if (comment) {
+        nextLines.push(comment);
+      }
+
+      nextLines.push(...nextBodyText.split("\n"));
+      const blockChanged = this.commitPreviewBlockSourceEdit(node, previewDocument, nextLines.join("\n"));
+      const updatePreviewHeaderImport = this.findPreviewParentMethod("updatePreviewHeaderImport");
+
+      if (updatePreviewHeaderImport && settings.mathEnabled) {
+        updatePreviewHeaderImport({
+          importLine: "import: https://raw.githubusercontent.com/liaTemplates/algebrite/master/README.md",
+          enabled: true,
+        });
+      }
+
+      return blockChanged;
+    },
+
+    hidePreviewQuizSettingsOverlay(previewDocument: Document) {
+      const overlay = previewDocument.getElementById("lia-preview-quiz-settings") as HTMLElement | null;
+
+      if (!overlay) {
+        return;
+      }
+
+      overlay.hidden = true;
+      delete overlay.dataset.liaPreviewQuizBlockIndex;
+    },
+
+    ensurePreviewQuizSettingsOverlay(previewDocument: Document) {
+      let overlay = previewDocument.getElementById("lia-preview-quiz-settings") as HTMLElement | null;
+
+      if (overlay) {
+        return overlay;
+      }
+
+      overlay = previewDocument.createElement("div");
+      overlay.id = "lia-preview-quiz-settings";
+      overlay.className = "lia-preview-quiz-settings";
+      overlay.hidden = true;
+      overlay.innerHTML = [
+        '<label class="lia-preview-quiz-settings__row">',
+        '  <input class="lia-preview-quiz-settings__checkbox" type="checkbox" data-lia-preview-quiz-field="partial" />',
+        '  <span class="lia-preview-quiz-settings__label">Partial Solution</span>',
+        '</label>',
+        '<label class="lia-preview-quiz-settings__row">',
+        '  <input class="lia-preview-quiz-settings__checkbox" type="checkbox" data-lia-preview-quiz-field="tries-enabled" />',
+        '  <span class="lia-preview-quiz-settings__label">Tries</span>',
+        '  <input class="lia-preview-quiz-settings__input lia-preview-quiz-settings__input--tries" type="number" min="1" step="1" data-lia-preview-quiz-field="tries" />',
+        '</label>',
+        '<label class="lia-preview-quiz-settings__stack">',
+        '  <span class="lia-preview-quiz-settings__label">Quiz Content</span>',
+        '  <input class="lia-preview-quiz-settings__input" type="text" data-lia-preview-quiz-field="content" placeholder="Text inside [[ ... ]]" />',
+        '</label>',
+        '<label class="lia-preview-quiz-settings__row">',
+        '  <input class="lia-preview-quiz-settings__checkbox" type="checkbox" data-lia-preview-quiz-field="math" />',
+        '  <span class="lia-preview-quiz-settings__label">Mathematik</span>',
+        '</label>',
+        '<div class="lia-preview-quiz-settings__actions">',
+        '  <button type="button" class="lia-preview-quiz-settings__button" data-lia-preview-quiz-action="cancel">Close</button>',
+        '  <button type="button" class="lia-preview-quiz-settings__button" data-lia-preview-quiz-action="apply">Apply</button>',
+        '</div>',
+      ].join("");
+
+      overlay.addEventListener("click", (event) => {
+        event.stopPropagation();
+      });
+
+      overlay.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+
+      const cancelButton = overlay.querySelector('[data-lia-preview-quiz-action="cancel"]') as HTMLButtonElement | null;
+      cancelButton?.addEventListener("click", () => {
+        this.hidePreviewQuizSettingsOverlay(previewDocument);
+      });
+
+      const applyButton = overlay.querySelector('[data-lia-preview-quiz-action="apply"]') as HTMLButtonElement | null;
+      applyButton?.addEventListener("click", () => {
+        const blockIndex = Number(overlay?.dataset.liaPreviewQuizBlockIndex || -1);
+        const node = previewDocument.querySelector(
+          `.lia-preview-block[data-lia-block-index="${blockIndex}"]`
+        ) as HTMLElement | null;
+        const partialInput = overlay?.querySelector('[data-lia-preview-quiz-field="partial"]') as HTMLInputElement | null;
+        const triesEnabledInput = overlay?.querySelector('[data-lia-preview-quiz-field="tries-enabled"]') as HTMLInputElement | null;
+        const triesInput = overlay?.querySelector('[data-lia-preview-quiz-field="tries"]') as HTMLInputElement | null;
+        const contentInput = overlay?.querySelector('[data-lia-preview-quiz-field="content"]') as HTMLInputElement | null;
+        const mathInput = overlay?.querySelector('[data-lia-preview-quiz-field="math"]') as HTMLInputElement | null;
+
+        if (!node || !partialInput || !triesEnabledInput || !triesInput || !contentInput || !mathInput) {
+          return;
+        }
+
+        this.updatePreviewQuizSettings(node, previewDocument, {
+          showPartialSolution: partialInput.checked,
+          solutionButton: triesEnabledInput.checked ? triesInput.value : "",
+          quizContent: contentInput.value,
+          mathEnabled: mathInput.checked,
+        });
+
+        this.hidePreviewQuizSettingsOverlay(previewDocument);
+      });
+
+      const triesEnabledInput = overlay.querySelector('[data-lia-preview-quiz-field="tries-enabled"]') as HTMLInputElement | null;
+      const triesInput = overlay.querySelector('[data-lia-preview-quiz-field="tries"]') as HTMLInputElement | null;
+      triesEnabledInput?.addEventListener("change", () => {
+        if (!triesInput) {
+          return;
+        }
+
+        triesInput.disabled = !triesEnabledInput.checked;
+
+        if (!triesEnabledInput.checked) {
+          triesInput.value = "";
+        }
+      });
+
+      previewDocument.addEventListener("pointerdown", (event) => {
+        if (!overlay || overlay.hidden) {
+          return;
+        }
+
+        if (!overlay.contains(event.target as Node)) {
+          this.hidePreviewQuizSettingsOverlay(previewDocument);
+        }
+      }, true);
+
+      previewDocument.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          this.hidePreviewQuizSettingsOverlay(previewDocument);
+        }
+      });
+
+      previewDocument.body.appendChild(overlay);
+      return overlay;
+    },
+
+    openPreviewQuizSettingsOverlay(node: HTMLElement, previewDocument: Document, clientX: number, clientY: number) {
+      const sourceText = this.getPreviewBlockSourceText(node, previewDocument);
+      const settings = this.parsePreviewQuizSettings(sourceText);
+      const overlay = this.ensurePreviewQuizSettingsOverlay(previewDocument);
+      const partialInput = overlay.querySelector('[data-lia-preview-quiz-field="partial"]') as HTMLInputElement | null;
+      const triesEnabledInput = overlay.querySelector('[data-lia-preview-quiz-field="tries-enabled"]') as HTMLInputElement | null;
+      const triesInput = overlay.querySelector('[data-lia-preview-quiz-field="tries"]') as HTMLInputElement | null;
+      const contentInput = overlay.querySelector('[data-lia-preview-quiz-field="content"]') as HTMLInputElement | null;
+      const mathInput = overlay.querySelector('[data-lia-preview-quiz-field="math"]') as HTMLInputElement | null;
+
+      if (!partialInput || !triesEnabledInput || !triesInput || !contentInput || !mathInput) {
+        return;
+      }
+
+      overlay.dataset.liaPreviewQuizBlockIndex = String(node.dataset.liaBlockIndex || "");
+      partialInput.checked = settings.showPartialSolution;
+      triesEnabledInput.checked = Boolean(settings.solutionButton);
+      triesInput.disabled = !triesEnabledInput.checked;
+      triesInput.value = settings.solutionButton;
+      contentInput.value = settings.quizContent;
+      mathInput.checked = settings.mathEnabled;
+      overlay.hidden = false;
+
+      const maxLeft = Math.max(8, previewDocument.defaultView!.innerWidth - overlay.offsetWidth - 8);
+      const maxTop = Math.max(8, previewDocument.defaultView!.innerHeight - overlay.offsetHeight - 8);
+      overlay.style.left = `${Math.min(clientX, maxLeft)}px`;
+      overlay.style.top = `${Math.min(clientY, maxTop)}px`;
     },
 
     shouldUsePreviewBlockSourceEditor(node: HTMLElement) {
@@ -2839,6 +3172,18 @@ export default {
         const editableTarget = this.getPreviewEditableTextTarget(node, previewDocument);
 
         const inlineEditableTargets = this.getPreviewInlineEditableTargets(node, previewDocument);
+
+        if (node.querySelector(":scope > .lia-quiz, :scope .lia-quiz")) {
+          if (node.dataset.liaPreviewQuizSettingsBound !== "true") {
+            node.addEventListener("contextmenu", (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              this.openPreviewQuizSettingsOverlay(node, previewDocument, event.clientX, event.clientY);
+            });
+
+            node.dataset.liaPreviewQuizSettingsBound = "true";
+          }
+        }
 
         if (inlineEditableTargets) {
           inlineEditableTargets.forEach((target, segmentIndex) => {
